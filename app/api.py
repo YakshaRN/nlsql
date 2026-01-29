@@ -14,32 +14,56 @@ def query(req: QueryRequest):
     context = get_context(req.session_id) if req.session_id else None
     decision = resolver.resolve(req.question, context)
 
-    if decision["decision"] == "OUT_OF_SCOPE":
+    # 🔐 SAFE ACCESS — never index LLM output directly
+    decision_type = decision.get("decision")
+
+    # ---- OUT OF SCOPE ----
+    if decision_type == "OUT_OF_SCOPE":
         return QueryResponse(decision="OUT_OF_SCOPE")
 
-    if decision["decision"] == "NEED_MORE_INFO":
+    # ---- NEED MORE INFO ----
+    if decision_type == "NEED_MORE_INFO":
         return QueryResponse(
             decision="NEED_MORE_INFO",
-            clarification_question=decision["clarification_question"]
+            clarification_question=decision.get(
+                "clarification_question",
+                "Could you provide more details?"
+            )
         )
 
-    params = decision["params"]
+    # ---- EXECUTE QUERY ----
+    if decision_type == "EXECUTE":
+        params = decision.get("params")
 
-    sql = WEATHER_SINGLE_PATH_TS_SQL
-    validate_sql(sql)
+        # Extra safety: params must exist
+        if not params:
+            return QueryResponse(
+                decision="ERROR",
+                summary="Missing query parameters. Please rephrase your question."
+            )
 
-    data = execute_query(sql, {
-        "forecast_init": params["initialization"],
-        "seasonal_init": "2025-12-04 00:00+00",
-        "location": params["location"],
-        "variable": params["variable"],
-        "ensemble_path": params["ensemble_path"]
-    })
+        sql = WEATHER_SINGLE_PATH_TS_SQL
+        validate_sql(sql)
 
-    save_context(req.session_id, decision)
+        data = execute_query(sql, {
+            "forecast_init": params.get("initialization"),
+            "seasonal_init": "2025-12-04 00:00+00",
+            "location": params.get("location"),
+            "variable": params.get("variable"),
+            "ensemble_path": params.get("ensemble_path")
+        })
 
+        if req.session_id:
+            save_context(req.session_id, decision)
+
+        return QueryResponse(
+            decision="EXECUTE",
+            data=data,
+            summary=f"Returned {len(data)} hourly values for {params.get('variable')}."
+        )
+
+    # ---- HARD FALLBACK (NO 500s EVER) ----
     return QueryResponse(
-        decision="EXECUTE",
-        data=data,
-        summary=f"Returned {len(data)} hourly values for {params['variable']}."
+        decision="ERROR",
+        summary="Unable to interpret the request. Please rephrase."
     )
