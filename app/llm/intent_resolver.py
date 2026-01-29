@@ -1,63 +1,50 @@
 from app.llm.bedrock_client import BedrockClient
-
-SYSTEM_PROMPT = """
-You are an intent classifier for a weather and energy forecasting system.
-
-Your job:
-- Decide whether the user's question can be answered using predefined SQL queries.
-- Extract parameters when possible.
-
-Allowed decisions:
-- OUT_OF_SCOPE
-- NEED_MORE_INFO
-- EXECUTE
-
-You MUST respond in valid JSON only.
-
-Valid response formats:
-
-1) OUT OF SCOPE
-{"decision": "OUT_OF_SCOPE"}
-
-2) NEED MORE INFO
-{
-  "decision": "NEED_MORE_INFO",
-  "clarification_question": "string"
-}
-
-3) EXECUTE
-{
-  "decision": "EXECUTE",
-  "query_id": "WEATHER_SINGLE_PATH_TS",
-  "params": {
-    "initialization": "YYYY-MM-DD HH:MM",
-    "location": "rto | north_raybn | south_lcra_aen_cps | west | houston",
-    "variable": "temp_2m | dew_2m | wind_10m_mps | ghi | wind_100m_mps | ghi_gen | temp_2m_gen",
-    "ensemble_path": 0
-  }
-}
-"""
+from app.llm.prompts import SYSTEM_PROMPT, build_user_prompt
+from app.queries.query_registry import QUERY_REGISTRY
+import json
 
 class IntentResolver:
     def __init__(self, llm=None):
         self.llm = llm or BedrockClient()
+        self.query_registry = QUERY_REGISTRY
 
-    def _build_prompt(self, question: str, context: dict | None) -> str:
-        """
-        Build the user prompt given question + optional context
-        """
-        prompt = f"User question:\n{question}\n"
+    def _build_system_prompt(self) -> str:
+        # Dynamically generate the EXECUTE decision format based on the query registry
+        execute_formats = []
+        for query_id, query_info in self.query_registry.items():
+            params_str = ", ".join([f'\"{param}\": \"{details["type"]}\"}' for param, details in query_info["parameters"].items()])
+            execute_formats.append(f"""
+{{
+  "decision": "EXECUTE",
+  "query_id": "{query_id}",
+  "params": {{
+    {params_str}
+  }}
+}}""")
+        
+        # Add descriptions to the registry for the LLM
+        registry_for_llm = {
+            qid: {
+                "description": qinfo["description"],
+                "parameters": {
+                    pname: pinfo["description"] for pname, pinfo in qinfo["parameters"].items()
+                }
+            }
+            for qid, qinfo in self.query_registry.items()
+        }
 
-        if context:
-            prompt += f"\nConversation context:\n{context}\n"
-
-        prompt += "\nClassify the intent and extract parameters."
-
-        return prompt
+        return SYSTEM_PROMPT + "\n\n" + \
+               f"QUERY_REGISTRY:\n{json.dumps(registry_for_llm, indent=2)}\n\n" + \
+               "Valid response formats:\n\n" + \
+               "1) OUT OF SCOPE\n{\"decision\": \"OUT_OF_SCOPE\"}\n\n" + \
+               "2) NEED MORE INFO\n{\n  \"decision\": \"NEED_MORE_INFO\",\n  \"clarification_question\": \"string\"\n}\n\n" + \
+               "3) EXECUTE (choose one of the following formats based on query_id)\n" + \
+               "\n".join(execute_formats)
 
     def resolve(self, question: str, context: dict | None) -> dict:
-        prompt = self._build_prompt(question, context)
-        raw = self.llm.invoke(SYSTEM_PROMPT, prompt)
+        system_prompt = self._build_system_prompt()
+        user_prompt = build_user_prompt(question, list(self.query_registry.keys()), context)
+        raw = self.llm.invoke(system_prompt, user_prompt)
 
         print("🔍 LLM RAW RESULT:", raw)
 

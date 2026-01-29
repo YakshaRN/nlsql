@@ -1,9 +1,10 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from app.models import QueryRequest, QueryResponse
 from app.llm.intent_resolver import IntentResolver
 from app.context.memory import get_context, save_context
 from app.db.executor import execute_query
-from app.queries.sql_templates import WEATHER_SINGLE_PATH_TS_SQL
+from app.queries.sql_templates import *  # Import all SQL templates
+from app.queries.query_registry import QUERY_REGISTRY
 from app.utils.sql_guard import validate_sql
 
 router = APIRouter()
@@ -43,26 +44,40 @@ def query(req: QueryRequest):
 
     # ---- EXECUTE QUERY ----
     if decision_type == "EXECUTE":
+        query_id = decision.get("query_id")
         params = decision.get("params")
 
-        if not params:
-            response = QueryResponse(
-                decision="ERROR",
-                summary="Missing query parameters. Please rephrase."
-            )
-            print("📤 API response:", response.dict())
-            return response
+        if not query_id:
+            raise HTTPException(status_code=400, detail="Missing query_id in LLM decision.")
+        if query_id not in QUERY_REGISTRY:
+            raise HTTPException(status_code=400, detail=f"Unknown query_id: {query_id}")
 
-        sql = WEATHER_SINGLE_PATH_TS_SQL
+        query_info = QUERY_REGISTRY[query_id]
+        sql_template_name = query_info["sql_template_name"]
+        sql = globals()[sql_template_name] # Get SQL template by name
+
+        if not params:
+            params = {}
+
+        # Validate and prepare parameters
+        prepared_params = {}
+        for param_name, param_info in query_info["parameters"].items():
+            if param_name in params:
+                prepared_params[param_name] = params[param_name]
+            elif param_info.get("required"):
+                # If a required parameter is missing, ask for more info
+                response = QueryResponse(
+                    decision="NEED_MORE_INFO",
+                    clarification_question=f"I need the '{param_name}' to execute this query. {param_info['description']}"
+                )
+                print("📤 API response:", response.dict())
+                return response
+            elif "default" in param_info:
+                prepared_params[param_name] = param_info["default"]
+        
         validate_sql(sql)
 
-        data = execute_query(sql, {
-            "forecast_init": params.get("forecast_init"),
-            "seasonal_init": "2025-12-04 00:00+00",
-            "location": params.get("location"),
-            "variable": params.get("variable"),
-            "ensemble_path": params.get("ensemble_path")
-        })
+        data = execute_query(sql, prepared_params)
 
         if req.session_id:
             save_context(req.session_id, decision)
@@ -70,7 +85,7 @@ def query(req: QueryRequest):
         response = QueryResponse(
             decision="EXECUTE",
             data=data,
-            summary=f"Returned {len(data)} hourly values for {params.get('variable')}."
+            summary=f"Successfully executed query '{query_id}' and returned {len(data)} records."
         )
 
         print("📤 API response:", response.dict())
