@@ -12,7 +12,7 @@ class IntentResolver:
         # Dynamically generate the EXECUTE decision format based on the query registry
         execute_formats = []
         for query_id, query_info in self.query_registry.items():
-            params_str = ", ".join([f'\"{param}\": \"{details["type"]}\"}' for param, details in query_info["parameters"].items()])
+            params_str = ", ".join([f'"{param}": "{details.get("type", "string")}"' for param, details in query_info["parameters"].items()])
             execute_formats.append(f"""
 {{
   "decision": "EXECUTE",
