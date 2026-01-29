@@ -57,7 +57,7 @@ def query(req: QueryRequest):
         validate_sql(sql)
 
         data = execute_query(sql, {
-            "forecast_init": params.get("initialization"),
+            "forecast_init": params.get("forecast_init"),
             "seasonal_init": "2025-12-04 00:00+00",
             "location": params.get("location"),
             "variable": params.get("variable"),
