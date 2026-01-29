@@ -9,37 +9,35 @@ class IntentResolver:
         self.query_registry = QUERY_REGISTRY
 
     def _build_system_prompt(self) -> str:
-        # Dynamically generate the EXECUTE decision format based on the query registry
-        execute_formats = []
-        for query_id, query_info in self.query_registry.items():
-            params_str = ", ".join([f'"{param}": "{details.get("type", "string")}"' for param, details in query_info["parameters"].items()])
-            execute_formats.append(f"""
-{{
-  "decision": "EXECUTE",
-  "query_id": "{query_id}",
-  "params": {{
-    {params_str}
-  }}
-}}""")
-        
-        # Add descriptions to the registry for the LLM
-        registry_for_llm = {
-            qid: {
+        # Build detailed registry info for the LLM with required/optional markers
+        registry_for_llm = {}
+        for qid, qinfo in self.query_registry.items():
+            params_info = {}
+            for pname, pinfo in qinfo["parameters"].items():
+                is_required = pinfo.get("required", False)
+                param_desc = pinfo["description"]
+                if is_required:
+                    param_desc = f"[REQUIRED] {param_desc}"
+                else:
+                    default = pinfo.get("default", "none")
+                    param_desc = f"[OPTIONAL, default={default}] {param_desc}"
+                params_info[pname] = param_desc
+            
+            registry_for_llm[qid] = {
                 "description": qinfo["description"],
-                "parameters": {
-                    pname: pinfo["description"] for pname, pinfo in qinfo["parameters"].items()
-                }
+                "parameters": params_info
             }
-            for qid, qinfo in self.query_registry.items()
-        }
 
         return SYSTEM_PROMPT + "\n\n" + \
                f"QUERY_REGISTRY:\n{json.dumps(registry_for_llm, indent=2)}\n\n" + \
-               "Valid response formats:\n\n" + \
-               "1) OUT OF SCOPE\n{\"decision\": \"OUT_OF_SCOPE\"}\n\n" + \
-               "2) NEED MORE INFO\n{\n  \"decision\": \"NEED_MORE_INFO\",\n  \"clarification_question\": \"string\"\n}\n\n" + \
-               "3) EXECUTE (choose one of the following formats based on query_id)\n" + \
-               "\n".join(execute_formats)
+               "RESPONSE FORMATS:\n\n" + \
+               "1) OUT OF SCOPE - question not related to any query:\n" + \
+               '{"decision": "OUT_OF_SCOPE"}\n\n' + \
+               "2) NEED MORE INFO - required parameter missing from user question:\n" + \
+               '{"decision": "NEED_MORE_INFO", "clarification_question": "What initialization/start timestamp should I use for this query?"}\n\n' + \
+               "3) EXECUTE - all required params available (extract from question or use defaults):\n" + \
+               '{"decision": "EXECUTE", "query_id": "GSI_PEAK_PROBABILITY_14_DAYS", "params": {"initialization": "2026-01-15 12:00", "gsi_threshold": 0.60, "days_ahead": 14}}\n\n' + \
+               "NOTE: params must contain ACTUAL VALUES, not type names. If user didn't provide a required value, use NEED_MORE_INFO."
 
     def resolve(self, question: str, context: dict | None) -> dict:
         system_prompt = self._build_system_prompt()
