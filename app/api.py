@@ -61,19 +61,35 @@ def query(req: QueryRequest):
 
         # Validate and prepare parameters
         prepared_params = {}
+        missing_params = []
+        
         for param_name, param_info in query_info["parameters"].items():
             if param_name in params:
-                prepared_params[param_name] = params[param_name]
+                param_value = params[param_name]
+                # Check if the LLM flagged this param as needing more info
+                if param_value == "NEED_MORE_INFO":
+                    if param_info.get("required"):
+                        missing_params.append((param_name, param_info['description']))
+                    elif "default" in param_info:
+                        prepared_params[param_name] = param_info["default"]
+                else:
+                    prepared_params[param_name] = param_value
             elif param_info.get("required"):
-                # If a required parameter is missing, ask for more info
-                response = QueryResponse(
-                    decision="NEED_MORE_INFO",
-                    clarification_question=f"I need the '{param_name}' to execute this query. {param_info['description']}"
-                )
-                print("📤 API response:", response.dict())
-                return response
+                # If a required parameter is missing entirely, track it
+                missing_params.append((param_name, param_info['description']))
             elif "default" in param_info:
                 prepared_params[param_name] = param_info["default"]
+        
+        # If any required params are missing or flagged as NEED_MORE_INFO, ask for clarification
+        if missing_params:
+            param_list = ", ".join([f"'{p[0]}'" for p in missing_params])
+            descriptions = "; ".join([f"{p[0]}: {p[1]}" for p in missing_params])
+            response = QueryResponse(
+                decision="NEED_MORE_INFO",
+                clarification_question=f"I need the following information to execute this query: {descriptions}"
+            )
+            print("📤 API response:", response.dict())
+            return response
         
         validate_sql(sql)
 
