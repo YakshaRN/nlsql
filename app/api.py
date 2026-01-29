@@ -93,19 +93,7 @@ def query(req: QueryRequest):
         
         validate_sql(sql)
 
-        # DRY RUN MODE: Return query + params without executing
-        if req.dry_run:
-            response = QueryResponse(
-                decision="EXECUTE",
-                query_id=query_id,
-                sql=sql.strip(),
-                params=prepared_params,
-                summary=f"Dry run: matched query '{query_id}' with {len(prepared_params)} parameters."
-            )
-            print("📤 API response (dry run):", response.dict())
-            return response
-
-        # EXECUTE MODE: Run the query
+        # Execute the query
         data = execute_query(sql, prepared_params)
 
         if req.session_id:
