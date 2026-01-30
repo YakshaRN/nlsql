@@ -16,7 +16,7 @@ SELECT
     ensemble_value
 FROM weather_seasonal_ensemble
 WHERE initialization = :seasonal_init
-  AND valid_datetime > :forecast_init::timestamptz + INTERVAL '336 hours'
+  AND valid_datetime > CAST(:forecast_init AS timestamptz) + INTERVAL '336 hours'
   AND project_name = 'ercot_generic'
   AND location = :location
   AND variable = :variable
@@ -32,7 +32,7 @@ WHERE initialization = :initialization
   AND project_name = 'ercot_generic'
   AND location = 'rto'
   AND variable = 'gsi'
-  AND valid_datetime < :initialization::timestamptz + interval ':days_ahead days'
+  AND valid_datetime < CAST(:initialization AS timestamptz) + make_interval(days => :days_ahead)
   AND ensemble_value > :gsi_threshold
 GROUP BY 1 ORDER BY 2 DESC LIMIT 1;
 """
@@ -53,7 +53,7 @@ WITH combined_data AS (
       AND project_name = 'ercot_generic'
       AND location = 'rto'
       AND variable = 'gsi'
-      AND valid_datetime > :forecast_init::timestamptz + interval '336 hours'
+      AND valid_datetime > CAST(:forecast_init AS timestamptz) + interval '336 hours'
 )
 SELECT valid_datetime, percentile_disc(0.99) WITHIN GROUP (ORDER BY ensemble_value) as p99_gsi
 FROM combined_data
@@ -67,7 +67,7 @@ WHERE initialization = :initialization
   AND project_name = 'ercot_generic'
   AND location = 'rto'
   AND variable = 'gsi'
-  AND valid_datetime < :initialization::timestamptz + interval ':days_ahead days'
+  AND valid_datetime < CAST(:initialization AS timestamptz) + make_interval(days => :days_ahead)
   AND EXTRACT(HOUR FROM valid_datetime AT TIME ZONE 'US/Central') BETWEEN :hours_start AND :hours_end
   AND ensemble_value > :gsi_threshold
 GROUP BY 1 ORDER BY 1;
@@ -94,7 +94,7 @@ WITH combined_data AS (
     SELECT ensemble_value FROM energy_base_ensemble
     WHERE initialization = :seasonal_init
       AND project_name = 'ercot_generic' AND location = 'rto' AND variable = 'gsi'
-      AND valid_datetime > :forecast_init::timestamptz + interval '336 hours'
+      AND valid_datetime > CAST(:forecast_init AS timestamptz) + interval '336 hours'
       AND EXTRACT(MONTH FROM valid_datetime) = :month
 )
 SELECT percentile_disc(0.5) WITHIN GROUP (ORDER BY ensemble_value) as p50_gsi,
