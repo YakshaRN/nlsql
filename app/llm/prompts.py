@@ -35,7 +35,14 @@ When CONVERSATION_CONTEXT is provided, use it intelligently for follow-up questi
    - "Why?" / "Explain that" = might be OUT_OF_SCOPE (we only do data queries)
    - Pronoun references ("that", "those", "it") = reference to previous results
 
-4. WHEN TO ASK vs REUSE:
+4. PRESERVE QUERY_ID FOR "SAME" REQUESTS:
+   - If user says "same for...", "give me same...", "repeat for...", "run again for..." = USE THE SAME query_id from LAST_QUERY_ID
+   - Only change the specific parameter the user mentions (e.g., new date)
+   - Keep all other parameters from last_params unchanged
+   - Example: If last_query_id was "GSI_PROBABILITY_EVENING_RAMP_NEXT_WEEK" and user says "same for Jan 12", 
+     use the SAME query_id with only initialization changed
+
+5. WHEN TO ASK vs REUSE:
    - If a required param is in last_params AND user's question is clearly a follow-up → REUSE
    - If user explicitly provides a new value → USE THE NEW VALUE
    - If it's a new topic/unrelated question → ASK for required params (don't assume)
@@ -75,6 +82,13 @@ def format_context_for_llm(context: dict) -> str:
         return "None"
     
     parts = []
+    
+    # Add last query_id prominently
+    last_query_id = context.get("last_query_id")
+    if last_query_id:
+        parts.append(f"LAST_QUERY_ID: {last_query_id}")
+        parts.append("(Use this query_id if user asks for 'same', 'repeat', 'again', etc.)")
+        parts.append("")
     
     # Add last used parameters
     last_params = context.get("last_params", {})

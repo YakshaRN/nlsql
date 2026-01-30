@@ -30,6 +30,7 @@ class SessionContext:
     """Full context for a session."""
     history: list = field(default_factory=list)  # List of ConversationTurn dicts
     last_params: dict = field(default_factory=dict)  # Most recent params for reuse
+    last_query_id: Optional[str] = None  # Most recent query_id for follow-ups
     
     def add_turn(self, turn: ConversationTurn):
         """Add a conversation turn, keeping only the last N turns."""
@@ -40,12 +41,17 @@ class SessionContext:
         # Update last_params with any new params from this turn
         if turn.params:
             self.last_params.update(turn.params)
+        
+        # Track last query_id for follow-up questions
+        if turn.query_id:
+            self.last_query_id = turn.query_id
     
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""
         return {
             "history": self.history,
-            "last_params": self.last_params
+            "last_params": self.last_params,
+            "last_query_id": self.last_query_id
         }
     
     @classmethod
@@ -54,6 +60,7 @@ class SessionContext:
         ctx = cls()
         ctx.history = data.get("history", [])
         ctx.last_params = data.get("last_params", {})
+        ctx.last_query_id = data.get("last_query_id")
         return ctx
 
 
