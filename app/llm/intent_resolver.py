@@ -10,9 +10,8 @@ class IntentResolver:
         self.llm = llm or BedrockClient()
         self.query_registry = QUERY_REGISTRY
 
-    def _build_system_prompt(self) -> str:
-        """Build the system prompt with query registry information."""
-        # Build detailed registry info for the LLM with required/optional markers
+    def _build_registry_for_llm(self) -> dict:
+        """Build a detailed registry representation for the LLM."""
         registry_for_llm = {}
         for qid, qinfo in self.query_registry.items():
             params_info = {}
@@ -30,17 +29,40 @@ class IntentResolver:
                 "description": qinfo["description"],
                 "parameters": params_info
             }
+        return registry_for_llm
 
-        return SYSTEM_PROMPT + "\n\n" + \
-               f"QUERY_REGISTRY:\n{json.dumps(registry_for_llm, indent=2)}\n\n" + \
-               "RESPONSE FORMATS:\n\n" + \
-               "1) OUT OF SCOPE - question not related to any query:\n" + \
-               '{"decision": "OUT_OF_SCOPE"}\n\n' + \
-               "2) NEED MORE INFO - required parameter missing and cannot be inferred from context:\n" + \
-               '{"decision": "NEED_MORE_INFO", "clarification_question": "What initialization/start timestamp should I use for this query?"}\n\n' + \
-               "3) EXECUTE - all required params available (from question, context, or defaults):\n" + \
-               '{"decision": "EXECUTE", "query_id": "GSI_PEAK_PROBABILITY_14_DAYS", "params": {"initialization": "2026-01-15 12:00", "gsi_threshold": 0.60, "days_ahead": 14}}\n\n' + \
-               "NOTE: params must contain ACTUAL VALUES, not type names. Reuse values from LAST USED PARAMETERS when appropriate for follow-ups."
+    def _build_system_prompt(self) -> str:
+        """Build the system prompt with query registry information."""
+        registry_for_llm = self._build_registry_for_llm()
+
+        response_format = """
+==============================================================================
+FULL QUERY REGISTRY (50 queries with parameters)
+==============================================================================
+""" + json.dumps(registry_for_llm, indent=2) + """
+
+==============================================================================
+RESPONSE FORMAT EXAMPLES
+==============================================================================
+1) EXECUTE - matched query with all required params available:
+{"decision": "EXECUTE", "query_id": "GSI_PEAK_PROBABILITY_14_DAYS", "params": {"initialization": "2026-01-15 12:00", "gsi_threshold": 0.60, "days_ahead": 14}}
+
+2) NEED_MORE_INFO - question is valid but missing required parameter:
+{"decision": "NEED_MORE_INFO", "clarification_question": "What forecast initialization timestamp should I use? Please provide a date/time like '2026-01-15 12:00'."}
+
+3) NEED_MORE_INFO - question is vague, needs primary concept:
+{"decision": "NEED_MORE_INFO", "clarification_question": "I can help with GSI stress indices, load/temperature forecasts, or renewable generation. Which area interests you?"}
+
+4) OUT_OF_SCOPE - not answerable by any of the 50 queries:
+{"decision": "OUT_OF_SCOPE", "message": "I specialize in ERCOT forecast data including GSI, load, temperature, and renewables. I can't help with [X], but I'd be happy to show you forecast data in one of these areas."}
+
+CRITICAL REMINDERS:
+- params must contain ACTUAL VALUES (not type names like 'timestamptz')
+- Timestamps format: 'YYYY-MM-DD HH:MM'
+- Reuse values from LAST USED PARAMETERS for follow-up questions
+- ALWAYS identify the PRIMARY CONCEPT before matching to a query
+"""
+        return SYSTEM_PROMPT + response_format
 
     def resolve(self, question: str, context: SessionContext | dict | None) -> dict:
         """
@@ -63,9 +85,10 @@ class IntentResolver:
             else:
                 context_dict = context
         
+        # Pass full registry dict for categorized summary
         user_prompt = build_user_prompt(
             question, 
-            list(self.query_registry.keys()), 
+            self.query_registry,  # Pass full dict, not just keys
             context_dict
         )
         
