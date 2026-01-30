@@ -41,6 +41,8 @@ When CONVERSATION_CONTEXT is provided, use it intelligently for follow-up questi
    - Keep all other parameters from last_params unchanged
    - Example: If last_query_id was "GSI_PROBABILITY_EVENING_RAMP_NEXT_WEEK" and user says "same for Jan 12", 
      use the SAME query_id with only initialization changed
+   - IMPORTANT: If user says "same" but LAST_QUERY_ID is missing/empty, return NEED_MORE_INFO asking 
+     "Which query would you like me to run? There's no previous query in your session."
 
 5. WHEN TO ASK vs REUSE:
    - If a required param is in last_params AND user's question is clearly a follow-up → REUSE
