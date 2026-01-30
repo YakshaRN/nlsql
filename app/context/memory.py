@@ -11,7 +11,7 @@ from typing import Optional
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 
-MAX_HISTORY_TURNS = 5  # Keep last 5 conversation turns
+MAX_HISTORY_TURNS = 25  # Keep last 25 conversation turns for extended sessions
 
 
 @dataclass

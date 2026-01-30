@@ -1,0 +1,931 @@
+{
+  "info": {
+    "name": "NLSQL API Test Collection",
+    "description": "Comprehensive test collection for testing user experience with 50 queries across various conversation patterns",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "session_id",
+      "value": "test-session-001"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Basic Queries - Direct Questions",
+      "description": "Testing clear, well-formed questions with all required info",
+      "item": [
+        {
+          "name": "1.1 GSI Peak Probability (complete)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What is the peak probability of GSI exceeding 0.60 over the next 14 days starting from 2026-01-15 12:00?\", \"session_id\": \"{{session_id}}\"}"
+            }
+          }
+        },
+        {
+          "name": "1.2 Tightest Hour GSI",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"Show me the tightest hour - the hour with highest average GSI - starting from 2026-01-15 12:00\", \"session_id\": \"{{session_id}}\"}"
+            }
+          }
+        },
+        {
+          "name": "1.3 P01 Extreme Cold Temp",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What is the P01 extreme cold temperature forecast for RTO for the next 10 days starting 2026-01-20 00:00?\", \"session_id\": \"{{session_id}}\"}"
+            }
+          }
+        },
+        {
+          "name": "1.4 Wind Dunkelflaute Probability",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What is the probability of Dunkelflaute - when both wind and solar capacity factors are below 5% during daylight hours - from 2026-01-18 12:00?\", \"session_id\": \"{{session_id}}\"}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Vague Questions - Need Clarification",
+      "description": "Testing how LLM handles ambiguous or incomplete questions",
+      "item": [
+        {
+          "name": "2.1 Too vague - just 'evening'",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What about the evening?\", \"session_id\": \"vague-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "2.2 Too vague - just 'forecast'",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"Show me the forecast\", \"session_id\": \"vague-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "2.3 Missing timestamp",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What is the GSI probability for the next 14 days?\", \"session_id\": \"vague-test-002\"}"
+            }
+          }
+        },
+        {
+          "name": "2.4 Partial info - needs primary concept",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What's happening tomorrow?\", \"session_id\": \"vague-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "2.5 Zone mentioned but no variable",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"Tell me about Houston zone\", \"session_id\": \"vague-test-001\"}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Follow-up Questions - Context Reuse",
+      "description": "Testing conversation memory and parameter reuse",
+      "item": [
+        {
+          "name": "3.1 Initial Query - Set Context",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What is the probability of GSI exceeding 0.60 during evening ramp for the next week starting 2026-01-15 12:00?\", \"session_id\": \"followup-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "3.2 Follow-up - Change threshold only",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What about if GSI threshold is 0.75?\", \"session_id\": \"followup-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "3.3 Follow-up - Same for different date",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"Same thing but for January 20th\", \"session_id\": \"followup-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "3.4 Follow-up - New query same session",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"Now show me the tightest hour\", \"session_id\": \"followup-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "3.5 Follow-up - Reference 'that'",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What's the average net demand during that hour?\", \"session_id\": \"followup-test-001\"}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Out of Scope Questions",
+      "description": "Testing polite handling of unsupported queries",
+      "item": [
+        {
+          "name": "4.1 Price question (not supported)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What will the electricity price be tomorrow?\", \"session_id\": \"oos-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "4.2 Historical actuals (not supported)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What was the actual load yesterday?\", \"session_id\": \"oos-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "4.3 Why question (explanation)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"Why is GSI high during cold snaps?\", \"session_id\": \"oos-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "4.4 Other ISO (not ERCOT)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What's the GSI for PJM?\", \"session_id\": \"oos-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "4.5 Completely unrelated",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What's the weather in New York?\", \"session_id\": \"oos-test-001\"}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Category Coverage - GSI Queries",
+      "description": "Testing Grid Stress & Scarcity queries (1-10)",
+      "item": [
+        {
+          "name": "5.1 GSI Peak Probability 14 days",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What is the peak probability of GSI above 0.60 in the next 14 days from 2026-01-15 12:00?\", \"session_id\": \"gsi-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "5.2 P99 GSI Peak Seasonal",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"When does the P99 extreme GSI peak over the seasonal horizon? Forecast init 2026-01-15 12:00, seasonal init 2025-12-05 00:00\", \"session_id\": \"gsi-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "5.3 GSI Evening Ramp Probability",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What is the probability of GSI exceeding 0.60 during evening ramp hours 17-20 for the next week from 2026-01-15 12:00?\", \"session_id\": \"gsi-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "5.4 GSI Stress Scenario Paths",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"Which ensemble paths show GSI above 0.75? Init time 2026-01-15 12:00\", \"session_id\": \"gsi-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "5.5 GSI Duration Worst 5%",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What is the expected duration of GSI above 0.70 in the worst 5% of outcomes from 2026-01-15 12:00?\", \"session_id\": \"gsi-test-001\"}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Category Coverage - Load & Temperature",
+      "description": "Testing Load & Temperature queries (11-20)",
+      "item": [
+        {
+          "name": "6.1 P01 Extreme Cold Forecast",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What is the P01 extreme cold temperature forecast for the next 10 days from 2026-01-15 12:00?\", \"session_id\": \"load-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "6.2 Average Load During Extreme Cold",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What is the average RTO load when temperature drops below -5°C from 2026-01-15 12:00?\", \"session_id\": \"load-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "6.3 Zone Freezing Probability",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"Which load zone has the highest probability of temperatures below 0°C next week from 2026-01-15 12:00?\", \"session_id\": \"load-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "6.4 Load Sensitivity to Temp Drop",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"How much does load increase for every 1°C drop in temperature below 5°C from 2026-01-15 12:00?\", \"session_id\": \"load-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "6.5 Probability RTO Load Exceeds 75GW",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What is the probability of RTO load exceeding 75,000 MW this winter? Forecast init 2026-01-15 12:00, seasonal init 2025-12-05 00:00\", \"session_id\": \"load-test-001\"}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Category Coverage - Renewables",
+      "description": "Testing Renewable (Wind & Solar) queries (21-30)",
+      "item": [
+        {
+          "name": "7.1 Dunkelflaute Probability",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What is the probability of Dunkelflaute - low wind and low solar simultaneously - from 2026-01-15 12:00?\", \"session_id\": \"renew-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "7.2 P10 Low Wind Evening Ramp",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What is the P10 low wind generation forecast during evening ramp from 2026-01-15 12:00?\", \"session_id\": \"renew-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "7.3 Max Downward Wind Ramp",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What is the maximum 1-hour downward wind ramp across all paths from 2026-01-15 12:00?\", \"session_id\": \"renew-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "7.4 West Wind Below Cut-in Speed",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What is the probability of West zone wind speed dropping below 3 m/s cut-in speed from 2026-01-15 12:00?\", \"session_id\": \"renew-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "7.5 Renewable Curtailment Risk Path",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"Which ensemble path has the maximum renewable curtailment risk - highest combined wind and solar - from 2026-01-15 12:00?\", \"session_id\": \"renew-test-001\"}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Category Coverage - Zonal",
+      "description": "Testing Zonal Basis & Constraints queries (31-40)",
+      "item": [
+        {
+          "name": "8.1 North vs West Load Spread",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What is the difference between North Zone and West Zone load in the P99 scenario from 2026-01-15 12:00?\", \"session_id\": \"zonal-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "8.2 West Wind Export Constraint",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"When is West zone wind generation above 80% of total RTO wind - export constraint risk - from 2026-01-15 12:00?\", \"session_id\": \"zonal-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "8.3 Houston Load Share Probability",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What is the probability that Houston load exceeds 25% of total RTO load from 2026-01-15 12:00?\", \"session_id\": \"zonal-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "8.4 Zone Load Volatility",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"Which zone has the highest load volatility from 2026-01-15 12:00?\", \"session_id\": \"zonal-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "8.5 South GHI vs RTO GSI Correlation",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What is the correlation between South zone GHI and RTO-wide GSI from 2026-01-15 12:00?\", \"session_id\": \"zonal-test-001\"}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Category Coverage - Advanced/Tails",
+      "description": "Testing Advanced Planning & Tail Risk queries (41-50)",
+      "item": [
+        {
+          "name": "9.1 Net Demand Exceeds 60GW in March",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What is the probability of net demand exceeding 60,000 MW in March? Seasonal init 2025-12-05 00:00\", \"session_id\": \"tail-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "9.2 Net Demand Uncertainty",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What is the net demand uncertainty - P95 minus P05 - from 2026-01-15 12:00?\", \"session_id\": \"tail-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "9.3 Low Wind High Outage Likelihood",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What is the likelihood of low wind and high outage occurring simultaneously from 2026-01-15 12:00?\", \"session_id\": \"tail-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "9.4 Date with Highest Tail Risk",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"Which date has the highest tail risk - largest gap between P50 and P99 GSI - from 2026-01-15 12:00?\", \"session_id\": \"tail-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "9.5 Volatility Peak Net Demand",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"Which hour has the highest volatility in net demand - the volatility peak - from forecast init 2026-01-15 12:00 and seasonal init 2025-12-05 00:00?\", \"session_id\": \"tail-test-001\"}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Natural Language Variations",
+      "description": "Testing different ways users might phrase the same question",
+      "item": [
+        {
+          "name": "10.1 Casual: Grid stress tonight",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"How stressed is the grid going to be tonight? Starting from 2026-01-15 12:00\", \"session_id\": \"natural-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "10.2 Colloquial: Will it be cold?",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"Is it going to be really cold next week? Show me the extreme cold forecast from 2026-01-15 12:00\", \"session_id\": \"natural-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "10.3 Business: Risk of blackout",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What's the risk of high grid stress lasting multiple hours starting 2026-01-15 12:00?\", \"session_id\": \"natural-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "10.4 Abbreviation: GSI prob",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"GSI prob above 0.6 for 14 days from Jan 15 2026 noon\", \"session_id\": \"natural-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "10.5 Wordy: Solar generation concern",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"I'm worried about solar generation being low. Can you show me the probability of solar being essentially zero during high grid stress times from 2026-01-15 12:00?\", \"session_id\": \"natural-test-001\"}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. Extended Conversation Flow",
+      "description": "A realistic 15-turn conversation exploring multiple topics",
+      "item": [
+        {
+          "name": "Turn 01: Start with GSI question",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What's the probability of GSI exceeding 0.60 in the next 14 days from 2026-01-15 12:00?\", \"session_id\": \"extended-conv-001\"}"
+            }
+          }
+        },
+        {
+          "name": "Turn 02: Follow-up - higher threshold",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What if the threshold is 0.75 instead?\", \"session_id\": \"extended-conv-001\"}"
+            }
+          }
+        },
+        {
+          "name": "Turn 03: Related - which paths exceed",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"Which specific ensemble paths show GSI above that threshold?\", \"session_id\": \"extended-conv-001\"}"
+            }
+          }
+        },
+        {
+          "name": "Turn 04: Pivot to temperature",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"Is there a cold snap expected? Show me extreme cold temps\", \"session_id\": \"extended-conv-001\"}"
+            }
+          }
+        },
+        {
+          "name": "Turn 05: Link cold to load",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What's the average load during those cold periods?\", \"session_id\": \"extended-conv-001\"}"
+            }
+          }
+        },
+        {
+          "name": "Turn 06: Zone comparison",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"Which zone is most likely to see freezing temperatures?\", \"session_id\": \"extended-conv-001\"}"
+            }
+          }
+        },
+        {
+          "name": "Turn 07: Pivot to renewables",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What about wind generation? Show me P10 low wind for evening ramp\", \"session_id\": \"extended-conv-001\"}"
+            }
+          }
+        },
+        {
+          "name": "Turn 08: Dunkelflaute risk",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What's the probability of Dunkelflaute - both wind and solar being very low?\", \"session_id\": \"extended-conv-001\"}"
+            }
+          }
+        },
+        {
+          "name": "Turn 09: Back to GSI context",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"During high GSI hours, how much solar generation is there?\", \"session_id\": \"extended-conv-001\"}"
+            }
+          }
+        },
+        {
+          "name": "Turn 10: Tightest hour",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"Show me the tightest hour - when GSI is highest on average\", \"session_id\": \"extended-conv-001\"}"
+            }
+          }
+        },
+        {
+          "name": "Turn 11: Duration of stress",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"How long could GSI stay above 0.70 in worst case scenarios?\", \"session_id\": \"extended-conv-001\"}"
+            }
+          }
+        },
+        {
+          "name": "Turn 12: Tail risk",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"Which date has the highest tail risk?\", \"session_id\": \"extended-conv-001\"}"
+            }
+          }
+        },
+        {
+          "name": "Turn 13: Net demand uncertainty",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What's the net demand uncertainty range?\", \"session_id\": \"extended-conv-001\"}"
+            }
+          }
+        },
+        {
+          "name": "Turn 14: Correlation question",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"How does South zone solar correlate with grid stress?\", \"session_id\": \"extended-conv-001\"}"
+            }
+          }
+        },
+        {
+          "name": "Turn 15: Final summary question",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"Show me the volatility peak - which hour has highest uncertainty in net demand?\", \"session_id\": \"extended-conv-001\"}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "12. Edge Cases",
+      "description": "Testing boundary conditions and special scenarios",
+      "item": [
+        {
+          "name": "12.1 Empty question",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"\", \"session_id\": \"edge-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "12.2 Just punctuation",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"???\", \"session_id\": \"edge-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "12.3 Same without prior context",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"Same for January 20th\", \"session_id\": \"edge-test-new-session\"}"
+            }
+          }
+        },
+        {
+          "name": "12.4 Invalid location",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"What's the load in Dallas zone from 2026-01-15 12:00?\", \"session_id\": \"edge-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "12.5 Extremely long question",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"I'm a power trader and I need to understand the grid stress situation for ERCOT over the next couple of weeks. Specifically, I want to know what the probability is that the Grid Stress Index will exceed 0.60 threshold at any point during the forecast period starting from January 15th 2026 at noon. This is important for my trading decisions.\", \"session_id\": \"edge-test-001\"}"
+            }
+          }
+        },
+        {
+          "name": "12.6 Mixed languages/typos",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/query",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\": \"whats teh GSI probabiilty form 2026-01-15?\", \"session_id\": \"edge-test-001\"}"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
