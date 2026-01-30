@@ -57,11 +57,20 @@ def build_user_prompt(
     context: dict | None
 ) -> str:
     """Build the user prompt with question, registry, and conversation context."""
+    from datetime import datetime
+    
+    # Get current date for relative date references
+    current_date = datetime.now().strftime("%Y-%m-%d")
+    current_year = datetime.now().year
+    current_month = datetime.now().strftime("%B")  # Full month name
     
     # Format context for the LLM
     context_str = format_context_for_llm(context) if context else "None (new conversation)"
     
     return f"""
+TODAY'S DATE: {current_date} (Year: {current_year}, Month: {current_month})
+Use this for relative references like "today", "this month", "current year", "tomorrow", etc.
+
 USER_QUESTION:
 {question}
 
