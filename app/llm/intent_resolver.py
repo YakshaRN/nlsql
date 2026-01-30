@@ -1,7 +1,9 @@
 from app.llm.bedrock_client import BedrockClient
 from app.llm.prompts import SYSTEM_PROMPT, build_user_prompt
 from app.queries.query_registry import QUERY_REGISTRY
+from app.context.memory import SessionContext
 import json
+
 
 class IntentResolver:
     def __init__(self, llm=None):
@@ -9,6 +11,7 @@ class IntentResolver:
         self.query_registry = QUERY_REGISTRY
 
     def _build_system_prompt(self) -> str:
+        """Build the system prompt with query registry information."""
         # Build detailed registry info for the LLM with required/optional markers
         registry_for_llm = {}
         for qid, qinfo in self.query_registry.items():
@@ -33,15 +36,39 @@ class IntentResolver:
                "RESPONSE FORMATS:\n\n" + \
                "1) OUT OF SCOPE - question not related to any query:\n" + \
                '{"decision": "OUT_OF_SCOPE"}\n\n' + \
-               "2) NEED MORE INFO - required parameter missing from user question:\n" + \
+               "2) NEED MORE INFO - required parameter missing and cannot be inferred from context:\n" + \
                '{"decision": "NEED_MORE_INFO", "clarification_question": "What initialization/start timestamp should I use for this query?"}\n\n' + \
-               "3) EXECUTE - all required params available (extract from question or use defaults):\n" + \
+               "3) EXECUTE - all required params available (from question, context, or defaults):\n" + \
                '{"decision": "EXECUTE", "query_id": "GSI_PEAK_PROBABILITY_14_DAYS", "params": {"initialization": "2026-01-15 12:00", "gsi_threshold": 0.60, "days_ahead": 14}}\n\n' + \
-               "NOTE: params must contain ACTUAL VALUES, not type names. If user didn't provide a required value, use NEED_MORE_INFO."
+               "NOTE: params must contain ACTUAL VALUES, not type names. Reuse values from LAST USED PARAMETERS when appropriate for follow-ups."
 
-    def resolve(self, question: str, context: dict | None) -> dict:
+    def resolve(self, question: str, context: SessionContext | dict | None) -> dict:
+        """
+        Resolve user question to a query decision.
+        
+        Args:
+            question: The user's natural language question
+            context: Either a SessionContext object or dict with conversation history
+            
+        Returns:
+            Decision dict with 'decision' key and relevant data
+        """
         system_prompt = self._build_system_prompt()
-        user_prompt = build_user_prompt(question, list(self.query_registry.keys()), context)
+        
+        # Convert SessionContext to dict for the prompt
+        context_dict = None
+        if context:
+            if isinstance(context, SessionContext):
+                context_dict = context.to_dict()
+            else:
+                context_dict = context
+        
+        user_prompt = build_user_prompt(
+            question, 
+            list(self.query_registry.keys()), 
+            context_dict
+        )
+        
         raw = self.llm.invoke(system_prompt, user_prompt)
 
         print("🔍 LLM RAW RESULT:", raw)

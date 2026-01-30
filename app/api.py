@@ -1,7 +1,12 @@
 from fastapi import APIRouter, HTTPException
 from app.models import QueryRequest, QueryResponse
 from app.llm.intent_resolver import IntentResolver
-from app.context.memory import get_context, save_context
+from app.context.memory import (
+    get_or_create_context, 
+    save_context, 
+    ConversationTurn,
+    SessionContext
+)
 from app.db.executor import execute_query
 from app.queries.sql_templates import *  # Import all SQL templates
 from app.queries.query_registry import QUERY_REGISTRY
@@ -10,13 +15,24 @@ from app.utils.sql_guard import validate_sql
 router = APIRouter()
 resolver = IntentResolver()
 
+# Maximum number of data rows to store in context for follow-up reference
+MAX_DATA_PREVIEW_ROWS = 5
+
+
 @router.post("/query", response_model=QueryResponse)
 def query(req: QueryRequest):
     # 🔍 Log input
     print("📥 Incoming question:", req.question)
     print("🧠 Session ID:", req.session_id)
 
-    context = get_context(req.session_id) if req.session_id else None
+    # Get or create session context
+    context = None
+    if req.session_id:
+        context = get_or_create_context(req.session_id)
+        print("📚 Context last_params:", context.last_params)
+        print("📚 Context history length:", len(context.history))
+
+    # Resolve intent with context
     decision = resolver.resolve(req.question, context)
 
     # 🔍 Log raw LLM output
@@ -26,18 +42,38 @@ def query(req: QueryRequest):
 
     # ---- OUT OF SCOPE ----
     if decision_type == "OUT_OF_SCOPE":
+        # Save turn even for out of scope (helps with conversation flow)
+        if req.session_id and context:
+            turn = ConversationTurn(
+                question=req.question,
+                summary="Question was out of scope for this API."
+            )
+            context.add_turn(turn)
+            save_context(req.session_id, context)
+        
         response = QueryResponse(decision="OUT_OF_SCOPE")
         print("📤 API response:", response.dict())
         return response
 
     # ---- NEED MORE INFO ----
     if decision_type == "NEED_MORE_INFO":
+        clarification = decision.get(
+            "clarification_question",
+            "Could you provide more details?"
+        )
+        
+        # Save turn with pending clarification
+        if req.session_id and context:
+            turn = ConversationTurn(
+                question=req.question,
+                summary=f"Asked for clarification: {clarification}"
+            )
+            context.add_turn(turn)
+            save_context(req.session_id, context)
+        
         response = QueryResponse(
             decision="NEED_MORE_INFO",
-            clarification_question=decision.get(
-                "clarification_question",
-                "Could you provide more details?"
-            )
+            clarification_question=clarification
         )
         print("📤 API response:", response.dict())
         return response
@@ -54,39 +90,58 @@ def query(req: QueryRequest):
 
         query_info = QUERY_REGISTRY[query_id]
         sql_template_name = query_info["sql_template_name"]
-        sql = globals()[sql_template_name] # Get SQL template by name
+        sql = globals()[sql_template_name]  # Get SQL template by name
 
         if not params:
             params = {}
 
         # Validate and prepare parameters
+        # Also check context.last_params for missing required params (follow-up support)
         prepared_params = {}
         missing_params = []
+        context_last_params = context.last_params if context else {}
         
         for param_name, param_info in query_info["parameters"].items():
             if param_name in params:
                 param_value = params[param_name]
                 # Check if the LLM flagged this param as needing more info
                 if param_value == "NEED_MORE_INFO":
-                    if param_info.get("required"):
+                    # Try to get from context first
+                    if param_name in context_last_params:
+                        prepared_params[param_name] = context_last_params[param_name]
+                    elif param_info.get("required"):
                         missing_params.append((param_name, param_info['description']))
                     elif "default" in param_info:
                         prepared_params[param_name] = param_info["default"]
                 else:
                     prepared_params[param_name] = param_value
+            elif param_name in context_last_params:
+                # Parameter not in LLM response but available in context - reuse it
+                prepared_params[param_name] = context_last_params[param_name]
             elif param_info.get("required"):
-                # If a required parameter is missing entirely, track it
+                # Required parameter is missing entirely
                 missing_params.append((param_name, param_info['description']))
             elif "default" in param_info:
                 prepared_params[param_name] = param_info["default"]
         
-        # If any required params are missing or flagged as NEED_MORE_INFO, ask for clarification
+        # If any required params are missing, ask for clarification
         if missing_params:
-            param_list = ", ".join([f"'{p[0]}'" for p in missing_params])
             descriptions = "; ".join([f"{p[0]}: {p[1]}" for p in missing_params])
+            clarification = f"I need the following information to execute this query: {descriptions}"
+            
+            # Save turn
+            if req.session_id and context:
+                turn = ConversationTurn(
+                    question=req.question,
+                    query_id=query_id,
+                    summary=f"Missing params: {[p[0] for p in missing_params]}"
+                )
+                context.add_turn(turn)
+                save_context(req.session_id, context)
+            
             response = QueryResponse(
                 decision="NEED_MORE_INFO",
-                clarification_question=f"I need the following information to execute this query: {descriptions}"
+                clarification_question=clarification
             )
             print("📤 API response:", response.dict())
             return response
@@ -96,8 +151,20 @@ def query(req: QueryRequest):
         # Execute the query
         data = execute_query(sql, prepared_params)
 
-        if req.session_id:
-            save_context(req.session_id, decision)
+        # Save successful turn with full context
+        if req.session_id and context:
+            # Store a preview of the data for follow-up reference
+            data_preview = data[:MAX_DATA_PREVIEW_ROWS] if data else None
+            
+            turn = ConversationTurn(
+                question=req.question,
+                query_id=query_id,
+                params=prepared_params,
+                summary=f"Returned {len(data)} records from {query_id}.",
+                data_preview=data_preview
+            )
+            context.add_turn(turn)
+            save_context(req.session_id, context)
 
         response = QueryResponse(
             decision="EXECUTE",
