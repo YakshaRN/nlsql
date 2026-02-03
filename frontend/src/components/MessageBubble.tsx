@@ -129,13 +129,15 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                     {showDetails ? 'Hide' : 'Show'} SQL & Params
                   </button>
                 )}
-                <button
-                  onClick={() => setShowRawResponse(!showRawResponse)}
-                  className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-300 transition-colors bg-slate-900/50 px-2 py-1 rounded"
-                >
-                  <Code className="w-4 h-4" />
-                  {showRawResponse ? 'Hide' : 'Show'} Raw Response
-                </button>
+                {response.data && response.data.length > 0 && (
+                  <button
+                    onClick={() => setShowRawResponse(!showRawResponse)}
+                    className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-300 transition-colors bg-slate-900/50 px-2 py-1 rounded"
+                  >
+                    <Code className="w-4 h-4" />
+                    {showRawResponse ? 'Hide' : 'Show'} JSON Data
+                  </button>
+                )}
               </div>
 
               {/* SQL and params details */}
@@ -154,21 +156,21 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                 </div>
               )}
 
-              {/* Raw API Response */}
-              {showRawResponse && (
+              {/* Raw Data Response */}
+              {showRawResponse && response.data && (
                 <div className="text-xs">
                   <div className="bg-slate-900 rounded-lg p-3 overflow-x-auto max-h-96">
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-slate-400 font-medium">Full API Response:</p>
+                      <p className="text-slate-400 font-medium">Query Data ({response.data.length} records):</p>
                       <button
-                        onClick={() => copyToClipboard(JSON.stringify(response, null, 2))}
+                        onClick={() => copyToClipboard(JSON.stringify(response.data, null, 2))}
                         className="flex items-center gap-1 text-slate-400 hover:text-slate-300 transition-colors"
                       >
                         {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
                         {copied ? 'Copied!' : 'Copy'}
                       </button>
                     </div>
-                    <pre className="text-amber-400 font-mono whitespace-pre-wrap">{JSON.stringify(response, null, 2)}</pre>
+                    <pre className="text-amber-400 font-mono whitespace-pre-wrap">{JSON.stringify(response.data, null, 2)}</pre>
                   </div>
                 </div>
               )}
