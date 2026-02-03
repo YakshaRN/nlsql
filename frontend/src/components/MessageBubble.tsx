@@ -1,8 +1,9 @@
-import { User, Bot, AlertCircle, HelpCircle, Database, ChevronDown, ChevronUp } from 'lucide-react';
+import { User, Bot, AlertCircle, HelpCircle, Database, ChevronDown, ChevronUp, Code, Copy, Check } from 'lucide-react';
 import { useState } from 'react';
 import type { Message } from '../types';
 import { DataTable } from './DataTable';
 import { DataChart } from './DataChart';
+import { QueryExplanation } from './QueryExplanation';
 
 interface MessageBubbleProps {
   message: Message;
@@ -10,9 +11,17 @@ interface MessageBubbleProps {
 
 export function MessageBubble({ message }: MessageBubbleProps) {
   const [showDetails, setShowDetails] = useState(false);
+  const [showRawResponse, setShowRawResponse] = useState(false);
   const [showChart, setShowChart] = useState(true);
+  const [copied, setCopied] = useState(false);
   const isUser = message.type === 'user';
   const response = message.response;
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const getDecisionBadge = () => {
     if (!response) return null;
@@ -66,6 +75,15 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                 )}
               </div>
 
+              {/* Query Explanation - always show for EXECUTE */}
+              {response.decision === 'EXECUTE' && (
+                <QueryExplanation 
+                  queryId={response.query_id} 
+                  params={response.params}
+                  data={response.data}
+                />
+              )}
+
               {/* Data display */}
               {response.decision === 'EXECUTE' && response.data && response.data.length > 0 && (
                 <div className="space-y-3">
@@ -92,7 +110,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                   {/* Chart or Table */}
                   <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700">
                     {showChart ? (
-                      <DataChart data={response.data} />
+                      <DataChart data={response.data} queryId={response.query_id} />
                     ) : (
                       <DataTable data={response.data} />
                     )}
@@ -100,29 +118,58 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                 </div>
               )}
 
-              {/* SQL Details toggle */}
-              {response.sql && (
+              {/* Toggle buttons for SQL and Raw Response */}
+              <div className="flex flex-wrap gap-2">
+                {response.sql && (
+                  <button
+                    onClick={() => setShowDetails(!showDetails)}
+                    className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-300 transition-colors bg-slate-900/50 px-2 py-1 rounded"
+                  >
+                    {showDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    {showDetails ? 'Hide' : 'Show'} SQL & Params
+                  </button>
+                )}
                 <button
-                  onClick={() => setShowDetails(!showDetails)}
-                  className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-300 transition-colors"
+                  onClick={() => setShowRawResponse(!showRawResponse)}
+                  className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-300 transition-colors bg-slate-900/50 px-2 py-1 rounded"
                 >
-                  {showDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                  {showDetails ? 'Hide' : 'Show'} SQL Details
+                  <Code className="w-4 h-4" />
+                  {showRawResponse ? 'Hide' : 'Show'} Raw Response
                 </button>
-              )}
+              </div>
 
               {/* SQL and params details */}
               {showDetails && response.sql && (
                 <div className="space-y-2 text-xs">
                   <div className="bg-slate-900 rounded-lg p-3 overflow-x-auto">
+                    <p className="text-slate-400 mb-2 font-medium">SQL Query:</p>
                     <pre className="text-green-400 font-mono whitespace-pre-wrap">{response.sql}</pre>
                   </div>
                   {response.params && Object.keys(response.params).length > 0 && (
                     <div className="bg-slate-900 rounded-lg p-3">
-                      <p className="text-slate-400 mb-1 font-medium">Parameters:</p>
+                      <p className="text-slate-400 mb-2 font-medium">Parameters:</p>
                       <pre className="text-blue-400 font-mono">{JSON.stringify(response.params, null, 2)}</pre>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Raw API Response */}
+              {showRawResponse && (
+                <div className="text-xs">
+                  <div className="bg-slate-900 rounded-lg p-3 overflow-x-auto max-h-96">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-slate-400 font-medium">Full API Response:</p>
+                      <button
+                        onClick={() => copyToClipboard(JSON.stringify(response, null, 2))}
+                        className="flex items-center gap-1 text-slate-400 hover:text-slate-300 transition-colors"
+                      >
+                        {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                        {copied ? 'Copied!' : 'Copy'}
+                      </button>
+                    </div>
+                    <pre className="text-amber-400 font-mono whitespace-pre-wrap">{JSON.stringify(response, null, 2)}</pre>
+                  </div>
                 </div>
               )}
             </div>

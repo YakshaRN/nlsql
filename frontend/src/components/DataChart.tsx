@@ -14,6 +14,8 @@ import {
 
 interface DataChartProps {
   data: Record<string, unknown>[];
+  title?: string;
+  queryId?: string | null;
 }
 
 const COLORS = [
@@ -27,7 +29,21 @@ const COLORS = [
   '#f97316', // orange
 ];
 
-export function DataChart({ data }: DataChartProps) {
+// Human-readable chart titles based on query ID
+const CHART_TITLES: Record<string, string> = {
+  GSI_PEAK_PROBABILITY_14_DAYS: 'Grid Stress Probability Over Time',
+  GSI_PEAK_TIMING: 'Expected GSI Peak Timing',
+  PEAK_LOAD_FORECAST: 'Peak Load Forecast (MW)',
+  LOAD_FORECAST_TIMESERIES: 'Hourly Load Forecast (MW)',
+  TEMPERATURE_FORECAST: 'Temperature Forecast (°C)',
+  WIND_GENERATION_FORECAST: 'Wind Generation Forecast (MW)',
+  SOLAR_GENERATION_FORECAST: 'Solar Generation Forecast (MW)',
+  P50_RENEWABLE_GEN_PER_ZONE: 'P50 Renewable Generation by Zone (MW)',
+  ZONAL_LOAD_COMPARISON: 'Load Comparison Across Zones (MW)',
+  NET_DEMAND_FORECAST: 'Net Demand Forecast (MW)',
+};
+
+export function DataChart({ data, title, queryId }: DataChartProps) {
   const { chartData, xKey, numericKeys, chartType } = useMemo(() => {
     if (!data || data.length === 0) {
       return { chartData: [], xKey: '', numericKeys: [], chartType: 'line' as const };
@@ -126,9 +142,15 @@ export function DataChart({ data }: DataChartProps) {
     margin: { top: 10, right: 30, left: 10, bottom: 0 },
   };
 
+  const chartTitle = title || (queryId ? CHART_TITLES[queryId] : null) || formatAxisLabel(numericKeys[0] || 'Value');
+
   return (
-    <div className="h-72">
-      <ResponsiveContainer width="100%" height="100%">
+    <div className="space-y-2">
+      {/* Chart Title */}
+      <h4 className="text-sm font-semibold text-slate-200 text-center">{chartTitle}</h4>
+      
+      <div className="h-72">
+        <ResponsiveContainer width="100%" height="100%">
         {chartType === 'bar' ? (
           <BarChart {...commonProps}>
             <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -207,7 +229,8 @@ export function DataChart({ data }: DataChartProps) {
             ))}
           </LineChart>
         )}
-      </ResponsiveContainer>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }
