@@ -11,6 +11,7 @@ from app.db.executor import execute_query
 from app.queries.sql_templates import *  # Import all SQL templates
 from app.queries.query_registry import QUERY_REGISTRY
 from app.utils.sql_guard import validate_sql
+from app.utils.intent_helpers import resolve_project, resolve_location
 
 router = APIRouter()
 resolver = IntentResolver()
@@ -51,12 +52,19 @@ def query(req: QueryRequest):
             context.add_turn(turn)
             save_context(req.session_id, context)
         
-        response = QueryResponse(decision="OUT_OF_SCOPE")
+        message = decision.get("message", "This question is out of scope for this API.")
+        similarity_score = decision.get("similarity_score")
+        
+        response = QueryResponse(
+            decision="OUT_OF_SCOPE",
+            message=message,
+            similarity_score=similarity_score
+        )
         print("📤 API response:", response.dict())
         return response
 
     # ---- NEED MORE INFO ----
-    if decision_type == "NEED_MORE_INFO":
+    if decision_type == "NEED_MORE_INFO": 
         clarification = decision.get(
             "clarification_question",
             "Could you provide more details?"
@@ -82,6 +90,17 @@ def query(req: QueryRequest):
     if decision_type == "EXECUTE":
         query_id = decision.get("query_id")
         params = decision.get("params")
+        similarity_score = decision.get("similarity_score")
+        confidence = decision.get("confidence")
+        
+        # Log confidence information
+        if similarity_score is not None:
+            print(f"📊 Similarity score: {similarity_score:.3f}, Confidence: {confidence}")
+            
+            # If confidence is low, we could optionally ask for confirmation
+            # For now, we'll proceed but log it
+            if confidence == "low":
+                print(f"⚠️  Low confidence match ({similarity_score:.3f}). Proceeding with execution.")
 
         if not query_id:
             raise HTTPException(status_code=400, detail="Missing query_id in LLM decision.")
@@ -102,6 +121,20 @@ def query(req: QueryRequest):
         context_last_params = context.last_params if context else {}
         
         for param_name, param_info in query_info["parameters"].items():
+            # Special handling for project_name and location to keep behavior deterministic
+            if param_name == "project_name":
+                # Always resolve via helper (currently always 'ercot_generic')
+                prepared_params[param_name] = resolve_project(context_last_params)
+                continue
+            
+            if param_name == "location":
+                raw_location = params.get("location")
+                prepared_params[param_name] = resolve_location(
+                    raw_from_llm=raw_location,
+                    last_params=context_last_params,
+                )
+                continue
+
             if param_name in params:
                 param_value = params[param_name]
                 # Check if the LLM flagged this param as needing more info
@@ -172,7 +205,9 @@ def query(req: QueryRequest):
             sql=sql.strip(),
             params=prepared_params,
             data=data,
-            summary=f"Successfully executed query '{query_id}' and returned {len(data)} records."
+            summary=f"Successfully executed query '{query_id}' and returned {len(data)} records.",
+            similarity_score=similarity_score,
+            confidence=confidence
         )
 
         print("📤 API response:", response.dict())

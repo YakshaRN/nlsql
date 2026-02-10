@@ -87,6 +87,26 @@ OPTIONAL parameters:
 
 NEVER return type names ("timestamptz", "float") as values - only actual values.
 
+PROJECT & LOCATION RESOLUTION:
+- Project name: 
+  * If user specifies a project, you may ignore it and ALWAYS use 'ercot_generic' (only supported project).
+  * If not mentioned, use 'ercot_generic' by default (do NOT ask).
+- Location:
+  * If user explicitly mentions a zone (Houston, West, North, South, ERCOT-wide/RTO, etc.) → map that to the appropriate location value.
+  * Else, if there is a value in last_params.location → REUSE that value.
+  * Else, default to 'rto' (ERCOT-wide) for queries that are meaningful at system level, unless a query description clearly implies a zonal view.
+
+TIME & HORIZON RESOLUTION:
+- Use TODAY'S DATE from the prompt to interpret relative phrases:
+  * "today", "tomorrow", "this week", "this month", "next 2 days", "next 7 days", "this weekend", "evening", "morning", "HB 17-20", etc.
+- Map these phrases to the appropriate parameters for the selected query:
+  * days_ahead / month / target_date
+  * hour_start / hour_end (e.g. 17–20 for evening ramp, 7–9 for morning peak)
+- Forecast horizon and table choice are IMPLIED by the query:
+  * Near-term horizon (inside forecast window) → queries that use *_forecast_ensemble tables.
+  * Seasonal / long-term horizon (beyond 336 hours, or entire month/season) → queries that use *_base_ensemble or UNION forecast + base.
+- YOU NEVER choose tables directly; you ONLY choose the query_id whose SQL already encodes the correct tables and joins.
+
 ==============================================================================
 CONVERSATION CONTEXT RULES
 ==============================================================================
@@ -94,6 +114,8 @@ For follow-up questions, use conversation context intelligently:
 
 1. PARAMETER REUSE: Reuse values from last_params for follow-ups
    - User: "What about GSI > 0.80?" → Reuse initialization from previous query
+   - User: "now for Houston" → Reuse all previous params but change only location='houston'
+   - User: "same but next week" → Reuse previous query_id and params, only adjust the time-related parameter(s)
 
 2. SAME/REPEAT REQUESTS: 
    - "same for...", "repeat for...", "run again" → Use LAST_QUERY_ID, only change mentioned param
@@ -104,6 +126,13 @@ For follow-up questions, use conversation context intelligently:
 
 4. NEW TOPIC:
    - If clearly a new unrelated question → ASK for required params (don't assume)
+
+5. AMBIGUOUS MATCHES BETWEEN CANDIDATES:
+   - If TWO candidate queries are clearly plausible and it is difficult to decide between them:
+     * DO NOT guess.
+     * Return NEED_MORE_INFO with a clarification that explicitly lists the 2 candidate query_ids and short descriptions, and ask the user which they mean.
+     * Example:
+       {"decision": "NEED_MORE_INFO", "clarification_question": "I can either run GSI_PEAK_PROBABILITY_14_DAYS (peak GSI probability in the next 14 days) or GSI_PROBABILITY_EVENING_RAMP_NEXT_WEEK (probability of GSI > 0.60 during evening ramp next week). Which one do you want?"}
 
 ==============================================================================
 OUT OF SCOPE HANDLING
@@ -144,6 +173,35 @@ def build_user_prompt(
     # Build categorized query summary for better LLM understanding
     query_summary = build_query_summary(registry)
     
+    # Check if this is a candidate registry (hybrid approach) or full registry
+    is_candidate_registry = len(registry) <= 10  # Top-K candidates are typically 5-10
+    
+    matching_instructions = """
+==============================================================================
+STEP-BY-STEP MATCHING INSTRUCTIONS
+==============================================================================
+1. Read the question carefully
+2. Identify the PRIMARY CONCEPT (GSI? Load? Temperature? Wind? Solar? Zone? Tail risk?)
+3. If no primary concept found → NEED_MORE_INFO (ask what data they want)
+4. Match to the appropriate query_id from the available candidates
+5. Extract or request required parameters
+"""
+    
+    if is_candidate_registry:
+        matching_instructions = """
+==============================================================================
+STEP-BY-STEP MATCHING INSTRUCTIONS
+==============================================================================
+NOTE: You are working with TOP-K CANDIDATE QUERIES that were pre-selected via semantic similarity.
+These are the most relevant queries for the user's question.
+
+1. Read the question carefully
+2. Review the candidate queries above (they are already ranked by relevance)
+3. Select the BEST matching query_id from the candidates
+4. If NONE of the candidates match → return OUT_OF_SCOPE
+5. Extract or request required parameters from the selected query
+"""
+    
     return f"""
 TODAY'S DATE: {current_date} (Year: {current_year}, Month: {current_month})
 Use this for relative references like "today", "this month", "current year", "tomorrow", etc.
@@ -153,14 +211,7 @@ USER QUESTION
 ==============================================================================
 {question}
 
-==============================================================================
-STEP-BY-STEP MATCHING INSTRUCTIONS
-==============================================================================
-1. Read the question carefully
-2. Identify the PRIMARY CONCEPT (GSI? Load? Temperature? Wind? Solar? Zone? Tail risk?)
-3. If no primary concept found → NEED_MORE_INFO (ask what data they want)
-4. Match to the appropriate query_id from the category
-5. Extract or request required parameters
+{matching_instructions}
 
 {query_summary}
 
@@ -180,7 +231,7 @@ Return ONE of these formats:
 2. NEED_MORE_INFO - need clarification or missing required param:
 {{"decision": "NEED_MORE_INFO", "clarification_question": "<helpful question>"}}
 
-3. OUT_OF_SCOPE - cannot be answered by any of the 50 queries:
+3. OUT_OF_SCOPE - cannot be answered by any of the candidate queries:
 {{"decision": "OUT_OF_SCOPE", "message": "<polite explanation of what we CAN help with>"}}
 """
 

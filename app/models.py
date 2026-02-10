@@ -12,3 +12,6 @@ class QueryResponse(BaseModel):
     query_id: str | None = None
     sql: str | None = None
     params: dict | None = None
+    similarity_score: float | None = None  
+    confidence: str | None = None  
+    message: str | None = None 

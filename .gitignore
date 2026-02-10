@@ -1,12 +1,51 @@
-# Python virtual environment
+# Python
 venv/
-.env
-
-# Python cache
+.venv/
+env/
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+.eggs/
+dist/
+build/
+develop-eggs/
 
-# OS files
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+
+# Embeddings and model cache
+.embeddings_cache.pkl
+
+# Testing / coverage / linting
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.tox/
+
+# OS
 .DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Node (if run from repo root)
+node_modules/
+
+# Frontend build (when built from root)
+frontend/dist/
