@@ -173,11 +173,23 @@ CRITICAL REMINDERS:
         
         # Follow-up detection patterns (case-insensitive)
         follow_up_patterns = [
+            # Direct reuse
             "same", "again", "repeat", "also", 
+            # Now variations
             "now for", "now with", "now use", "now change",
-            "but with", "but for", "but using",
-            "change to", "this time", "run again", "rerun",
-            "same query", "same data", "previous query", "give me same"
+            # But variations
+            "but with", "but for", "but using", "but instead",
+            # Change variations
+            "change to", "change threshold", "change the",
+            # Time references
+            "this time", "next time",
+            # Run variations
+            "run again", "rerun", "do it again",
+            # Explicit same
+            "same query", "same data", "previous query", 
+            "give me same", "show me same",
+            # Additional patterns
+            "instead of", "rather than", "instead", " instead"
         ]
         
         # Check if any follow-up pattern exists
@@ -292,24 +304,51 @@ CRITICAL REMINDERS:
         # If this is a follow-up query, ensure the last query is included as top candidate
         if follow_up_info and follow_up_info.get("last_query_id"):
             last_qid = follow_up_info["last_query_id"]
-            # Check if last_query_id is already in candidates
-            candidate_ids = [q[0] for q in candidate_queries]
-            if last_qid not in candidate_ids and last_qid in self.query_registry:
-                # Add it as the top candidate with high similarity
-                metadata = {
-                    "description": self.query_registry[last_qid].get("description", ""),
-                    "is_follow_up_match": True
-                }
-                candidate_queries = [(last_qid, 0.95, metadata)] + candidate_queries
-                print(f"🔄 Added last query '{last_qid}' as top candidate for follow-up")
+            if last_qid in self.query_registry:
+                # Check if last_query_id is already in candidates
+                candidate_ids = [q[0] for q in candidate_queries] if candidate_queries else []
+                
+                if last_qid not in candidate_ids:
+                    # Add it as the top candidate with high similarity
+                    metadata = {
+                        "description": self.query_registry[last_qid].get("description", ""),
+                        "is_follow_up_match": True
+                    }
+                    # If no candidates at all, create list with just this one
+                    if not candidate_queries:
+                        candidate_queries = [(last_qid, 0.95, metadata)]
+                        print(f"🔄 No semantic matches found, but follow-up detected!")
+                        print(f"   Using last query '{last_qid}' as sole candidate")
+                    else:
+                        # Add to existing candidates as top
+                        candidate_queries = [(last_qid, 0.95, metadata)] + candidate_queries
+                        print(f"🔄 Added last query '{last_qid}' as top candidate for follow-up")
         
         if not candidate_queries:
-            # No candidates found - likely out of scope
-            return {
-                "decision": "OUT_OF_SCOPE",
-                "message": "I couldn't find any matching queries for your question. I specialize in ERCOT forecast data including GSI, load, temperature, and renewable generation.",
-                "similarity_score": 0.0
-            }
+            # No candidates found - check if user might have meant a follow-up
+            # Extract context info for helpful suggestion
+            last_query_id = None
+            if context:
+                if isinstance(context, SessionContext):
+                    last_query_id = context.last_query_id
+                elif isinstance(context, dict):
+                    last_query_id = context.get("last_query_id")
+            
+            # If context exists, provide helpful follow-up suggestion
+            if last_query_id:
+                return {
+                    "decision": "OUT_OF_SCOPE",
+                    "message": f"I couldn't find any matching queries for your question. If you wanted to modify the previous query ({last_query_id}), try phrasing it like:\n\n• 'same for [new value]'\n• 'repeat with [new parameter]'\n• 'now with [change]'\n• 'also for [modification]'\n\nOtherwise, I specialize in ERCOT forecast data including GSI, load, temperature, wind, solar, and renewable generation.",
+                    "similarity_score": 0.0,
+                    "suggestion": "use_follow_up_keywords"
+                }
+            else:
+                # No context - truly out of scope
+                return {
+                    "decision": "OUT_OF_SCOPE",
+                    "message": "I couldn't find any matching queries for your question. I specialize in ERCOT forecast data including GSI, load, temperature, and renewable generation.",
+                    "similarity_score": 0.0
+                }
         
         # Log top candidates
         print(f"📊 Top candidates:")

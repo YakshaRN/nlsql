@@ -7,10 +7,13 @@ export interface QueryResponse {
   decision: 'EXECUTE' | 'NEED_MORE_INFO' | 'OUT_OF_SCOPE' | 'ERROR';
   data: Record<string, unknown>[] | null;
   summary: string | null;
+  message: string | null;
   clarification_question: string | null;
   query_id: string | null;
   sql: string | null;
   params: Record<string, unknown> | null;
+  similarity_score: number | null;
+  confidence: string | null;
 }
 
 export interface Message {

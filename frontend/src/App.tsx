@@ -37,7 +37,7 @@ function App() {
         return response.clarification_question || 'I need more information to answer your question. Could you please provide more details?';
       
       case 'OUT_OF_SCOPE':
-        return response.summary || "I'm sorry, but this question is outside the scope of what I can answer. I can help with ERCOT energy forecasting questions about GSI, load, temperature, wind, solar, and zonal data.";
+        return response.message || response.summary || "I'm sorry, but this question is outside the scope of what I can answer. I can help with ERCOT energy forecasting questions about GSI, load, temperature, wind, solar, and zonal data.";
       
       case 'ERROR':
         return response.summary || 'An error occurred while processing your request. Please try again.';
