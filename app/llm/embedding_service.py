@@ -127,13 +127,17 @@ class EmbeddingService:
             try:
                 with open(cache_file, 'rb') as f:
                     cache_data = pickle.load(f)
+                    cached_ids = set(m['query_id'] for m in cache_data.get('metadata', []))
+                    registry_ids = set(QUERY_REGISTRY.keys())
                     if (cache_data.get('model_name') == self.model_name and 
-                        cache_data.get('query_count') == len(QUERY_REGISTRY)):
+                        cached_ids == registry_ids):
                         self.query_embeddings = cache_data['embeddings']
                         self.query_metadata = cache_data['metadata']
                         self._embeddings_loaded = True
                         print(f"✅ Loaded {len(self.query_metadata)} query embeddings from cache")
                         return
+                    else:
+                        print(f"⚠️  Cache is stale (query IDs changed). Rebuilding embeddings...")
             except Exception as e:
                 print(f"⚠️  Failed to load cache: {e}. Rebuilding embeddings...")
         

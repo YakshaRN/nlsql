@@ -229,6 +229,16 @@ CRITICAL REMINDERS:
                 context_dict = context
         
         # Build candidate registry (only top-K) for user prompt
+        # Filter out any candidates whose IDs are not in the current registry
+        candidate_queries = [q for q in candidate_queries if q[0] in self.query_registry]
+        
+        if not candidate_queries:
+            return {
+                "decision": "OUT_OF_SCOPE",
+                "message": "I couldn't find any matching queries for your question.",
+                "similarity_score": 0.0
+            }
+        
         candidate_registry = {q[0]: self.query_registry[q[0]] for q in candidate_queries}
         
         # Pass candidate registry instead of full registry
