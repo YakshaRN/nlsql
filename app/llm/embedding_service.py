@@ -2,7 +2,6 @@
 Embedding service for semantic query matching.
 Generates embeddings for queries and performs similarity search.
 """
-from sentence_transformers import SentenceTransformer
 import numpy as np
 from typing import List, Tuple, Dict
 import os
@@ -22,11 +21,29 @@ class EmbeddingService:
                        'all-MiniLM-L6-v2' is fast and good for semantic similarity.
                        'all-mpnet-base-v2' is more accurate but slower.
         """
-        self.model = SentenceTransformer(model_name)
+        self._model = None  # Lazy-loaded to avoid OOM on low-memory instances
         self.model_name = model_name
         self.query_embeddings: np.ndarray = None
         self.query_metadata: List[Dict] = []
         self._embeddings_loaded = False
+    
+    @property
+    def model(self):
+        """Lazy-load the SentenceTransformer model only when needed."""
+        if self._model is None:
+            from sentence_transformers import SentenceTransformer
+            print(f"🔄 Loading SentenceTransformer model '{self.model_name}'...")
+            self._model = SentenceTransformer(self.model_name)
+        return self._model
+    
+    def _unload_model(self):
+        """Free model from memory after embedding generation."""
+        if self._model is not None:
+            del self._model
+            self._model = None
+            import gc
+            gc.collect()
+            print("🧹 Unloaded SentenceTransformer model to free memory")
         
     def _build_query_text(self, query_id: str, query_info: dict, example_question: str = None) -> str:
         """
@@ -166,15 +183,19 @@ class EmbeddingService:
                 'example_question': example_question
             })
         
-        # Generate embeddings
+        # Generate embeddings (small batch size to limit peak memory on low-RAM instances)
         print(f"📊 Generating embeddings for {len(texts)} queries...")
         self.query_embeddings = self.model.encode(
             texts,
+            batch_size=8,
             show_progress_bar=True,
             convert_to_numpy=True
         )
         self.query_metadata = metadata
         self._embeddings_loaded = True
+        
+        # Free the model from memory — it's no longer needed for cached operation
+        self._unload_model()
         
         # Cache embeddings
         try:
