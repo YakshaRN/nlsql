@@ -3,6 +3,7 @@ from app.llm.prompts import SYSTEM_PROMPT, build_user_prompt
 from app.llm.embedding_service import get_embedding_service
 from app.queries.query_registry import QUERY_REGISTRY
 from app.context.memory import SessionContext
+from app.config.initialization_config import get_initialization_for_query
 import json
 
 
@@ -139,6 +140,47 @@ CRITICAL REMINDERS:
 """
         return SYSTEM_PROMPT + response_format
 
+    def _ensure_correct_initialization(self, decision: dict) -> dict:
+        """
+        Ensure initialization parameters use correct fixed timestamps.
+        
+        This method automatically fills in or corrects initialization parameters
+        based on the query_id to use the correct data timestamps instead of 
+        current date.
+        
+        Args:
+            decision: The decision dict with query_id and params
+            
+        Returns:
+            Updated decision dict with correct initialization values
+        """
+        if decision.get("decision") != "EXECUTE":
+            return decision
+            
+        query_id = decision.get("query_id")
+        if not query_id:
+            return decision
+            
+        params = decision.get("params", {})
+        
+        # Get the correct initialization values for this query
+        correct_init_params = get_initialization_for_query(query_id)
+        
+        # Update or add the initialization parameters
+        for param_name, param_value in correct_init_params.items():
+            if param_name not in params or not params[param_name]:
+                # Parameter missing or empty - add it
+                params[param_name] = param_value
+                print(f"✅ Auto-filled {param_name} = '{param_value}' for {query_id}")
+            elif params[param_name] != param_value:
+                # Parameter exists but has wrong value - correct it
+                old_value = params[param_name]
+                params[param_name] = param_value
+                print(f"🔧 Corrected {param_name} from '{old_value}' to '{param_value}' for {query_id}")
+        
+        decision["params"] = params
+        return decision
+
     def resolve(self, question: str, context: SessionContext | dict | None) -> dict:
         """
         Resolve user question to a query decision using hybrid approach.
@@ -215,6 +257,8 @@ CRITICAL REMINDERS:
                             raw["similarity_score"] = sim
                             raw["confidence"] = confidence
                             break
+                    # Auto-fill initialization parameters with correct values
+                    raw = self._ensure_correct_initialization(raw)
             return raw
 
         # Case 2: nested decision
@@ -231,13 +275,15 @@ CRITICAL REMINDERS:
                             normalized["similarity_score"] = sim
                             normalized["confidence"] = confidence
                             break
+                    # Auto-fill initialization parameters with correct values
+                    normalized = self._ensure_correct_initialization(normalized)
                 return normalized
 
         # Case 3: unknown shape - fallback to top candidate if similarity is high
         if top_similarity >= 0.75:
             print(f"⚠️  LLM output unclear, but high similarity ({top_similarity:.3f}). Using top candidate.")
             top_query_id = candidate_queries[0][0]
-            return {
+            result = {
                 "decision": "EXECUTE",
                 "query_id": top_query_id,
                 "params": {},
@@ -245,6 +291,9 @@ CRITICAL REMINDERS:
                 "confidence": confidence,
                 "note": "LLM output was unclear, but high similarity match found"
             }
+            # Auto-fill initialization parameters with correct values
+            result = self._ensure_correct_initialization(result)
+            return result
 
         # Case 4: unknown shape and low similarity
         return {

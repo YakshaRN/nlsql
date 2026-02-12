@@ -15,6 +15,27 @@ SYSTEM CONSTRAINTS
 - Forecast horizon: 336 hours from initialization, then seasonal data
 
 ==============================================================================
+CRITICAL: FIXED INITIALIZATION TIMES (DO NOT USE CURRENT DATE)
+==============================================================================
+The data tables have FIXED initialization timestamps. DO NOT use today's date or current time.
+ALWAYS use these specific initialization times:
+
+For FORECAST queries (short-term, 336 hours):
+  - initialization: '2026-01-09 12:00'
+  - forecast_init: '2026-01-09 12:00'
+  
+For SEASONAL/BASE queries (long-term beyond 336 hours):
+  - seasonal_init: '2025-12-05 00:00'
+
+When a user asks for "current", "today", "now", or "this week":
+  → Use initialization = '2026-01-09 12:00' (NOT today's actual date)
+  → The system will query data relative to 2026-01-09 12:00 as the reference point
+
+When a query needs BOTH forecast_init AND seasonal_init:
+  → forecast_init: '2026-01-09 12:00'
+  → seasonal_init: '2025-12-05 00:00'
+
+==============================================================================
 QUERY CATEGORIES (50 total queries)
 ==============================================================================
 When analyzing a user question, FIRST identify which CATEGORY it belongs to based on the PRIMARY CONCEPT mentioned:
@@ -78,7 +99,13 @@ Example responses for vague questions:
 ==============================================================================
 PARAMETER RULES
 ==============================================================================
-REQUIRED parameters:
+INITIALIZATION PARAMETERS (MOST IMPORTANT):
+- initialization / forecast_init: ALWAYS use '2026-01-09 12:00' (DO NOT USE CURRENT DATE)
+- seasonal_init: ALWAYS use '2025-12-05 00:00'
+- When user says "current", "now", "today" → Still use '2026-01-09 12:00' as initialization
+- These are FIXED data timestamps, NOT relative to today's actual date
+
+REQUIRED parameters (other than initialization):
 - If NOT provided by user and NOT in conversation context → return NEED_MORE_INFO
 - Timestamps format: 'YYYY-MM-DD HH:MM' (e.g., '2026-01-15 12:00')
 
@@ -205,6 +232,21 @@ These are the most relevant queries for the user's question.
     return f"""
 TODAY'S DATE: {current_date} (Year: {current_year}, Month: {current_month})
 Use this for relative references like "today", "this month", "current year", "tomorrow", etc.
+
+==============================================================================
+CRITICAL: INITIALIZATION TIMESTAMPS
+==============================================================================
+IMPORTANT: The data has FIXED initialization times. DO NOT use today's actual date!
+
+For forecast queries (short-term):
+  - initialization or forecast_init = '2026-01-09 12:00'
+  
+For seasonal queries (long-term):
+  - seasonal_init = '2025-12-05 00:00'
+
+When user asks for "current", "now", "today", "this week":
+  → ALWAYS use initialization = '2026-01-09 12:00'
+  → Think of 2026-01-09 12:00 as the "now" reference point for the forecast data
 
 ==============================================================================
 USER QUESTION
