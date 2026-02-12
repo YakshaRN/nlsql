@@ -140,6 +140,92 @@ CRITICAL REMINDERS:
 """
         return SYSTEM_PROMPT + response_format
 
+    def _detect_follow_up_query(self, question: str, context: SessionContext | dict | None) -> dict | None:
+        """
+        Detect if this is a follow-up query that wants to reuse the last query with modifications.
+        
+        Uses smart detection:
+        1. Check for follow-up keywords ("same", "again", etc.)
+        2. Check if CORE CONCEPT changed (solar→wind, GSI→load)
+        3. Only treat as follow-up if concept is SAME or compatible
+        
+        Args:
+            question: The user's question
+            context: Session context with last query info
+            
+        Returns:
+            Decision dict if follow-up detected, None otherwise
+        """
+        if not context:
+            return None
+        
+        # Extract last_query_id from context
+        last_query_id = None
+        if isinstance(context, SessionContext):
+            last_query_id = context.last_query_id
+        elif isinstance(context, dict):
+            last_query_id = context.get("last_query_id")
+        
+        if not last_query_id:
+            return None
+        
+        question_lower = question.lower()
+        
+        # Follow-up detection patterns (case-insensitive)
+        follow_up_patterns = [
+            "same", "again", "repeat", "also", 
+            "now for", "now with", "now use", "now change",
+            "but with", "but for", "but using",
+            "change to", "this time", "run again", "rerun",
+            "same query", "same data", "previous query", "give me same"
+        ]
+        
+        # Check if any follow-up pattern exists
+        has_follow_up_keyword = any(pattern in question_lower for pattern in follow_up_patterns)
+        
+        if not has_follow_up_keyword:
+            return None
+        
+        # CRITICAL: Check if core concept changed (concept switching)
+        # If user mentions a different primary concept, treat as NEW query
+        concept_switch_keywords = {
+            'gsi': ['gsi', 'grid stress', 'scarcity'],
+            'load': ['load', 'demand'],
+            'temperature': ['temperature', 'temp', 'cold', 'hot', 'freezing'],
+            'wind': ['wind'],
+            'solar': ['solar'],
+            'renewable': ['renewable', 'dunkelflaute'],
+            'zone': ['zone', 'zonal', 'north', 'south', 'west', 'houston'],
+        }
+        
+        # Determine concept of last query
+        last_query_concept = None
+        for concept, keywords in concept_switch_keywords.items():
+            if any(kw in last_query_id.lower() for kw in keywords):
+                last_query_concept = concept
+                break
+        
+        # Check if current question mentions a DIFFERENT concept
+        if last_query_concept:
+            for concept, keywords in concept_switch_keywords.items():
+                if concept != last_query_concept:
+                    # Check if question explicitly mentions this different concept
+                    if any(kw in question_lower for kw in keywords):
+                        print(f"⚠️  Concept switch detected: {last_query_concept} → {concept}")
+                        print(f"   Treating as NEW query (not follow-up)")
+                        return None  # Not a follow-up, concept changed!
+        
+        print(f"🔄 Follow-up query detected! Reusing last query: {last_query_id}")
+        print(f"   Same concept maintained: {last_query_concept or 'unknown'}")
+        
+        # Return a decision to reuse the last query
+        return {
+            "is_follow_up": True,
+            "last_query_id": last_query_id,
+            "last_concept": last_query_concept,
+            "hint": "This is a follow-up query. Reuse the last query_id and last_params, only change parameters mentioned in the question."
+        }
+    
     def _ensure_correct_initialization(self, decision: dict) -> dict:
         """
         Ensure initialization parameters use correct fixed timestamps.
@@ -192,6 +278,9 @@ CRITICAL REMINDERS:
         Returns:
             Decision dict with 'decision' key and relevant data, including similarity scores
         """
+        # Step 0: Check if this is a follow-up query
+        follow_up_info = self._detect_follow_up_query(question, context)
+        
         # Step 1: Retrieve top-K candidates using embeddings
         print(f"🔍 Retrieving top-{self.top_k_candidates} similar queries via embeddings...")
         candidate_queries = self.embedding_service.find_similar_queries(
@@ -199,6 +288,20 @@ CRITICAL REMINDERS:
             top_k=self.top_k_candidates,
             min_similarity=self.min_similarity
         )
+        
+        # If this is a follow-up query, ensure the last query is included as top candidate
+        if follow_up_info and follow_up_info.get("last_query_id"):
+            last_qid = follow_up_info["last_query_id"]
+            # Check if last_query_id is already in candidates
+            candidate_ids = [q[0] for q in candidate_queries]
+            if last_qid not in candidate_ids and last_qid in self.query_registry:
+                # Add it as the top candidate with high similarity
+                metadata = {
+                    "description": self.query_registry[last_qid].get("description", ""),
+                    "is_follow_up_match": True
+                }
+                candidate_queries = [(last_qid, 0.95, metadata)] + candidate_queries
+                print(f"🔄 Added last query '{last_qid}' as top candidate for follow-up")
         
         if not candidate_queries:
             # No candidates found - likely out of scope
@@ -245,7 +348,8 @@ CRITICAL REMINDERS:
         user_prompt = build_user_prompt(
             question, 
             candidate_registry,  # Pass only candidate queries
-            context_dict
+            context_dict,
+            follow_up_info  # Pass follow-up detection info
         )
         
         # Step 3: LLM makes final decision from candidates

@@ -144,8 +144,11 @@ For follow-up questions, use conversation context intelligently:
    - User: "now for Houston" → Reuse all previous params but change only location='houston'
    - User: "same but next week" → Reuse previous query_id and params, only adjust the time-related parameter(s)
 
-2. SAME/REPEAT REQUESTS: 
-   - "same for...", "repeat for...", "run again" → Use LAST_QUERY_ID, only change mentioned param
+2. SAME/REPEAT REQUESTS (CRITICAL FOR FOLLOW-UPS): 
+   - "same for...", "repeat for...", "run again", "give me same", "also for", "but with", "change to"
+   - → Use LAST_QUERY_ID, keep ALL last_params, only change mentioned param
+   - Example: User says "same for 7 days" after running GSI query with 21 days
+     → Return: {"decision": "EXECUTE", "query_id": "GSI_PEAK_PROBABILITY", "params": {"days_ahead": 7, "gsi_threshold": 0.90, "initialization": "2026-01-09 12:00"}}
    - If no LAST_QUERY_ID exists → NEED_MORE_INFO: "Which query would you like me to run?"
 
 3. PRONOUN REFERENCES:
@@ -162,16 +165,35 @@ For follow-up questions, use conversation context intelligently:
        {"decision": "NEED_MORE_INFO", "clarification_question": "I can either run GSI_PEAK_PROBABILITY_14_DAYS (peak GSI probability in the next 14 days) or GSI_PROBABILITY_EVENING_RAMP_NEXT_WEEK (probability of GSI > 0.60 during evening ramp next week). Which one do you want?"}
 
 ==============================================================================
-OUT OF SCOPE HANDLING
+SYSTEM INFORMATION QUESTIONS (Special Handling)
 ==============================================================================
-If the question cannot be answered by any of the 50 queries, return OUT_OF_SCOPE with a helpful message:
+If user asks ABOUT the system itself (not data queries), provide helpful information:
+
+Questions about system capabilities:
+- "What locations do you serve?"
+- "Which projects do you have?"
+- "What data is available?"
+- "What can you help me with?"
+- "Tell me about your capabilities"
+
+→ Return OUT_OF_SCOPE with INFORMATIVE message including system details:
+
+{
+  "decision": "OUT_OF_SCOPE",
+  "message": "I can help you query ERCOT energy forecast data. Here's what I have:\n\n**Project**: ercot_generic (ERCOT Texas grid)\n\n**Locations**:\n- rto (ERCOT-wide)\n- north_raybn (North Zone)\n- south_lcra_aen_cps (South Zone)\n- west (West Zone)\n- houston (Houston Zone)\n\n**Data Categories**:\n- Grid Stress (GSI) - scarcity risk indicators\n- Load & Temperature - demand forecasts\n- Renewables - wind and solar generation\n- Zonal Analysis - zone comparisons\n- Advanced Planning - tail risks and uncertainty\n\n**Forecast Horizon**: 336 hours (14 days) + seasonal outlook\n\nWhat would you like to explore?"
+}
+
+==============================================================================
+OUT OF SCOPE HANDLING (Other Cases)
+==============================================================================
+If the question cannot be answered by any of the 50 queries AND is not a system info question:
 
 Examples of OUT_OF_SCOPE:
 - Historical actual data (we only have forecasts)
 - Price forecasts (we don't have price data)
 - Explanations of "why" (we only provide data queries)
 - Real-time current conditions
-- Other ISOs besides ERCOT
+- Other ISOs besides ERCOT (PJM, MISO, etc.)
 
 Polite response pattern:
 {
@@ -184,7 +206,8 @@ Polite response pattern:
 def build_user_prompt(
     question: str,
     registry: dict,
-    context: dict | None
+    context: dict | None,
+    follow_up_info: dict | None = None
 ) -> str:
     """Build the user prompt with question, registry, and conversation context."""
     from datetime import datetime
@@ -196,6 +219,32 @@ def build_user_prompt(
     
     # Format context for the LLM
     context_str = format_context_for_llm(context) if context else "None (new conversation)"
+    
+    # Add follow-up detection info if available
+    follow_up_str = ""
+    if follow_up_info:
+        follow_up_str = f"""
+==============================================================================
+⚠️  FOLLOW-UP QUERY DETECTED!
+==============================================================================
+This appears to be a follow-up to the previous query.
+Last Query ID: {follow_up_info.get('last_query_id')}
+
+INSTRUCTION: 
+{follow_up_info.get('hint', '')}
+
+You should:
+1. Use query_id: {follow_up_info.get('last_query_id')}
+2. Reuse all parameters from LAST USED PARAMETERS (see context below)
+3. Only change the parameters mentioned in the user's question
+4. Return EXECUTE with the updated parameters
+
+Example:
+  Previous query: GSI_PEAK_PROBABILITY with days_ahead=21
+  User asks: "same for 7 days"
+  → Return: {{"decision": "EXECUTE", "query_id": "GSI_PEAK_PROBABILITY", "params": {{"days_ahead": 7, ...other params from last_params}}}}
+==============================================================================
+"""
     
     # Build categorized query summary for better LLM understanding
     query_summary = build_query_summary(registry)
@@ -247,6 +296,8 @@ For seasonal queries (long-term):
 When user asks for "current", "now", "today", "this week":
   → ALWAYS use initialization = '2026-01-09 12:00'
   → Think of 2026-01-09 12:00 as the "now" reference point for the forecast data
+
+{follow_up_str}
 
 ==============================================================================
 USER QUESTION
