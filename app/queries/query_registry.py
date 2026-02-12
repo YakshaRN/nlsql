@@ -2,9 +2,9 @@ QUERY_REGISTRY = {
     # =========================================================================
     # Section I: Grid Stress & Scarcity Risk (GSI) - Queries 1-10
     # =========================================================================
-    "GSI_PEAK_PROBABILITY_14_DAYS": {
+    "GSI_PEAK_PROBABILITY": {
         "description": "Calculates the peak probability of Grid Stress Index (GSI) exceeding a specified threshold within a given number of days from the forecast initialization.",
-        "sql_template_name": "GSI_PEAK_PROBABILITY_14_DAYS_SQL",
+        "sql_template_name": "GSI_PEAK_PROBABILITY_SQL",
         "parameters": {
             "initialization": {
                 "type": "timestamptz",
@@ -41,9 +41,9 @@ QUERY_REGISTRY = {
             }
         }
     },
-    "GSI_PROBABILITY_EVENING_RAMP_NEXT_WEEK": {
-        "description": "Calculates the probability of GSI exceeding a threshold during the evening ramp (HB 17-20) in the next week.",
-        "sql_template_name": "GSI_PROBABILITY_EVENING_RAMP_NEXT_WEEK_SQL",
+    "GSI_PROBABILITY_EVENING_RAMP": {
+        "description": "Calculates the probability of GSI exceeding a threshold during the evening ramp (HB 17-20) for a specified number of days ahead.",
+        "sql_template_name": "GSI_PROBABILITY_EVENING_RAMP_SQL",
         "parameters": {
             "initialization": {
                 "type": "timestamptz",

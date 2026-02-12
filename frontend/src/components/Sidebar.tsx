@@ -12,7 +12,7 @@ const exampleQueries = [
     color: 'text-red-400',
     questions: [
       'What is the peak probability of GSI > 0.60 in the next 14 days?',
-      'What is the probability of GSI exceeding 0.60 during evening ramp next week?',
+      'What is the probability of GSI exceeding 0.60 during evening ramp?',
       'Show me the tightest hour with highest average GSI',
     ],
   },

@@ -68,6 +68,10 @@ def get_initialization_for_query(query_id: str) -> dict:
         "VOLATILITY_PEAK_NET_DEMAND"
     ]
     
+    # Note: Query IDs have been renamed to be more generic:
+    # - GSI_PEAK_PROBABILITY_14_DAYS → GSI_PEAK_PROBABILITY
+    # - GSI_PROBABILITY_EVENING_RAMP_NEXT_WEEK → GSI_PROBABILITY_EVENING_RAMP
+    
     # Queries that use only seasonal_init
     queries_with_seasonal_only = [
         "LOAD_RANGE_P99_P01_DATE",

@@ -2,7 +2,7 @@
 # Section I: Grid Stress & Scarcity Risk (GSI) - Queries 1-10
 # =============================================================================
 
-GSI_PEAK_PROBABILITY_14_DAYS_SQL = """
+GSI_PEAK_PROBABILITY_SQL = """
 SELECT valid_datetime, COUNT(*)::float / 1000.0 as probability
 FROM energy_forecast_ensemble
 WHERE initialization = :initialization
@@ -37,7 +37,7 @@ FROM combined_data
 GROUP BY 1 ORDER BY 2 DESC LIMIT 1;
 """
 
-GSI_PROBABILITY_EVENING_RAMP_NEXT_WEEK_SQL = """
+GSI_PROBABILITY_EVENING_RAMP_SQL = """
 SELECT EXTRACT(HOUR FROM valid_datetime AT TIME ZONE 'US/Central') as hb, COUNT(*)::float / 7000.0 as probability
 FROM energy_forecast_ensemble
 WHERE initialization = :initialization
