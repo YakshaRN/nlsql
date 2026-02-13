@@ -271,6 +271,41 @@ class EmbeddingService:
             return 'medium'
         else:
             return 'low'
+    
+    def embed_text(self, text: str) -> np.ndarray:
+        """
+        Generate embedding for arbitrary text.
+        
+        Args:
+            text: Text to embed
+            
+        Returns:
+            Embedding vector as numpy array
+        """
+        embedding = self.model.encode([text], convert_to_numpy=True)[0]
+        return embedding
+    
+    def calculate_similarity(self, embedding1: np.ndarray, embedding2: np.ndarray) -> float:
+        """
+        Calculate cosine similarity between two embeddings.
+        
+        Args:
+            embedding1: First embedding vector
+            embedding2: Second embedding vector
+            
+        Returns:
+            Cosine similarity score (0-1)
+        """
+        # Normalize vectors
+        norm1 = np.linalg.norm(embedding1)
+        norm2 = np.linalg.norm(embedding2)
+        
+        if norm1 == 0 or norm2 == 0:
+            return 0.0
+        
+        # Cosine similarity
+        similarity = np.dot(embedding1, embedding2) / (norm1 * norm2)
+        return float(similarity)
 
 
 # Global instance (lazy-loaded)

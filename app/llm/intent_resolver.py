@@ -4,11 +4,15 @@ from app.llm.embedding_service import get_embedding_service
 from app.queries.query_registry import QUERY_REGISTRY
 from app.context.memory import SessionContext
 from app.config.initialization_config import get_initialization_for_query
+from app.config.system_info import get_system_info_for_type
+from app.llm.intent_classifier import get_intent_classifier
+from typing import Tuple
 import json
 
 
 class IntentResolver:
-    def __init__(self, llm=None, top_k_candidates: int = 5, min_similarity: float = 0.5):
+    def __init__(self, llm=None, top_k_candidates: int = 5, min_similarity: float = 0.5, 
+                 use_intent_classifier: bool = True):
         """
         Initialize the IntentResolver with hybrid approach.
         
@@ -16,12 +20,15 @@ class IntentResolver:
             llm: LLM client (defaults to BedrockClient)
             top_k_candidates: Number of top candidates to retrieve via embeddings
             min_similarity: Minimum similarity threshold for candidate retrieval
+            use_intent_classifier: Use embedding-based intent classification (more robust)
         """
         self.llm = llm or BedrockClient()
         self.query_registry = QUERY_REGISTRY
         self.embedding_service = get_embedding_service()
+        self.intent_classifier = get_intent_classifier() if use_intent_classifier else None
         self.top_k_candidates = top_k_candidates
         self.min_similarity = min_similarity
+        self.use_intent_classifier = use_intent_classifier
 
     def _build_registry_for_llm(self, candidate_query_ids: list = None) -> dict:
         """
@@ -140,6 +147,59 @@ CRITICAL REMINDERS:
 """
         return SYSTEM_PROMPT + response_format
 
+    def _validate_follow_up_compatibility(self, question: str, last_query_id: str) -> Tuple[bool, str]:
+        """
+        Validate that the follow-up request is compatible with the last query.
+        
+        Checks if the parameter user wants to change actually exists in the last query.
+        
+        Args:
+            question: The follow-up question
+            last_query_id: The previous query ID
+            
+        Returns:
+            Tuple of (is_compatible, reason)
+        """
+        if last_query_id not in self.query_registry:
+            return False, "Last query not found in registry"
+        
+        last_query_params = self.query_registry[last_query_id]['parameters']
+        question_lower = question.lower()
+        
+        # Extract what parameter user is trying to change
+        parameter_hints = {
+            'days': 'days_ahead',
+            'day': 'days_ahead',
+            'threshold': 'gsi_threshold',
+            'temperature': 'temp_threshold',
+            'temp': 'temp_threshold',
+            'hour': 'hour_start',
+            'hb': 'hour_start',
+            'location': 'location',
+            'zone': 'location',
+            'houston': 'location',
+            'north': 'location',
+            'west': 'location',
+            'south': 'location',
+            'month': 'month',
+        }
+        
+        # Check if user mentions a parameter that doesn't exist in last query
+        mentioned_params = []
+        for hint, param_name in parameter_hints.items():
+            if hint in question_lower:
+                mentioned_params.append(param_name)
+        
+        # If user mentions specific parameters, check if they exist
+        if mentioned_params:
+            missing_params = [p for p in mentioned_params if p not in last_query_params]
+            if missing_params:
+                available = list(last_query_params.keys())
+                return False, f"Last query doesn't have parameter(s): {missing_params}. Available: {available}"
+        
+        # If no specific parameters mentioned, assume it's valid (just rerun)
+        return True, "Compatible"
+    
     def _detect_follow_up_query(self, question: str, context: SessionContext | dict | None) -> dict | None:
         """
         Detect if this is a follow-up query that wants to reuse the last query with modifications.
@@ -198,43 +258,63 @@ CRITICAL REMINDERS:
         if not has_follow_up_keyword:
             return None
         
-        # CRITICAL: Check if core concept changed (concept switching)
+        # CRITICAL 1: Check parameter compatibility
+        # Make sure the follow-up request is compatible with last query
+        is_compatible, reason = self._validate_follow_up_compatibility(question, last_query_id)
+        if not is_compatible:
+            print(f"⚠️  Follow-up incompatible: {reason}")
+            print(f"   User said 'same' but it doesn't make sense")
+            
+            # Return incompatibility info (will be handled by caller)
+            return {
+                "is_follow_up": False,
+                "incompatible": True,
+                "last_query_id": last_query_id,
+                "reason": reason,
+                "hint": "User tried follow-up but parameter doesn't exist in last query"
+            }
+        
+        # CRITICAL 2: Check if core concept changed (concept switching)
         # If user mentions a different primary concept, treat as NEW query
         concept_switch_keywords = {
             'gsi': ['gsi', 'grid stress', 'scarcity'],
             'load': ['load', 'demand'],
-            'temperature': ['temperature', 'temp', 'cold', 'hot', 'freezing'],
+            'temperature': ['temperature', 'temp', 'cold', 'hot', 'freezing', 'dew'],
             'wind': ['wind'],
             'solar': ['solar'],
             'renewable': ['renewable', 'dunkelflaute'],
             'zone': ['zone', 'zonal', 'north', 'south', 'west', 'houston'],
         }
         
-        # Determine concept of last query
-        last_query_concept = None
+        # Determine ALL concepts in last query (some queries have multiple)
+        last_query_concepts = []
         for concept, keywords in concept_switch_keywords.items():
             if any(kw in last_query_id.lower() for kw in keywords):
-                last_query_concept = concept
-                break
+                last_query_concepts.append(concept)
         
         # Check if current question mentions a DIFFERENT concept
-        if last_query_concept:
+        # Only reject if it mentions a concept NOT in the last query
+        if last_query_concepts:
+            mentioned_concepts = []
             for concept, keywords in concept_switch_keywords.items():
-                if concept != last_query_concept:
-                    # Check if question explicitly mentions this different concept
-                    if any(kw in question_lower for kw in keywords):
-                        print(f"⚠️  Concept switch detected: {last_query_concept} → {concept}")
-                        print(f"   Treating as NEW query (not follow-up)")
-                        return None  # Not a follow-up, concept changed!
+                if any(kw in question_lower for kw in keywords):
+                    mentioned_concepts.append(concept)
+            
+            # Check if any mentioned concept is NOT in last query concepts
+            for mentioned in mentioned_concepts:
+                if mentioned not in last_query_concepts:
+                    print(f"⚠️  Concept switch detected: {last_query_concepts} → {mentioned}")
+                    print(f"   Treating as NEW query (not follow-up)")
+                    return None  # Not a follow-up, concept changed!
         
         print(f"🔄 Follow-up query detected! Reusing last query: {last_query_id}")
-        print(f"   Same concept maintained: {last_query_concept or 'unknown'}")
+        print(f"   Concepts maintained: {last_query_concepts or ['unknown']}")
         
         # Return a decision to reuse the last query
         return {
             "is_follow_up": True,
             "last_query_id": last_query_id,
-            "last_concept": last_query_concept,
+            "last_concepts": last_query_concepts,
             "hint": "This is a follow-up query. Reuse the last query_id and last_params, only change parameters mentioned in the question."
         }
     
@@ -279,6 +359,44 @@ CRITICAL REMINDERS:
         decision["params"] = params
         return decision
 
+    def _detect_system_info_question(self, question: str) -> dict | None:
+        """
+        Detect if user is asking about system capabilities (not data queries).
+        
+        Args:
+            question: The user's question
+            
+        Returns:
+            Response dict if system info question detected, None otherwise
+        """
+        question_lower = question.lower()
+        
+        # System information question patterns
+        system_info_patterns = [
+            ('project', ['what project', 'which project', 'project information', 'project available', 
+                        'tell me about project', 'what data do you have']),
+            ('location', ['what location', 'which location', 'location available', 'locations served',
+                         'what zones', 'which zones']),
+            ('capability', ['what can you', 'what do you', 'help me with', 'capabilities',
+                          'what kind of', 'what type of']),
+        ]
+        
+        for category, patterns in system_info_patterns:
+            if any(pattern in question_lower for pattern in patterns):
+                print(f"ℹ️  System information question detected: {category}")
+                
+                # Get dynamic message from configuration
+                message = get_system_info_for_type(category)
+                
+                return {
+                    "decision": "OUT_OF_SCOPE",
+                    "message": message,
+                    "similarity_score": 0.0,
+                    "info_type": category
+                }
+        
+        return None
+    
     def resolve(self, question: str, context: SessionContext | dict | None) -> dict:
         """
         Resolve user question to a query decision using hybrid approach.
@@ -290,8 +408,79 @@ CRITICAL REMINDERS:
         Returns:
             Decision dict with 'decision' key and relevant data, including similarity scores
         """
-        # Step 0: Check if this is a follow-up query
-        follow_up_info = self._detect_follow_up_query(question, context)
+        # Step 0: Intent classification (follow-up vs system info vs data query)
+        # Use embedding-based if available, fallback to keyword-based
+        follow_up_info = None
+        system_info_response = None
+        
+        if self.use_intent_classifier and self.intent_classifier:
+            # 🚀 ROBUST: Embedding-based intent classification
+            try:
+                intent, confidence, scores = self.intent_classifier.classify(question)
+                print(f"🎯 Intent classified: {intent} (confidence: {confidence:.3f})")
+                
+                if intent == "SYSTEM_INFO" and confidence > 0.65:
+                    # Handle system information question
+                    system_info_response = self._detect_system_info_question(question)
+                    if system_info_response:
+                        print(f"ℹ️  Returning system info (embedding-based detection)")
+                        return system_info_response
+                
+                elif intent == "FOLLOW_UP" and confidence > 0.65 and context:
+                    # Detected as follow-up with high confidence
+                    follow_up_info = self._detect_follow_up_query(question, context)
+                    if not follow_up_info:
+                        # Keyword-based didn't confirm, but embedding says it's follow-up
+                        # Trust the embedding if confidence is high
+                        last_query_id = None
+                        if isinstance(context, SessionContext):
+                            last_query_id = context.last_query_id
+                        elif isinstance(context, dict):
+                            last_query_id = context.get("last_query_id")
+                        
+                        if last_query_id and confidence > 0.75:
+                            print(f"🔄 Embedding detected follow-up (confidence: {confidence:.3f})")
+                            follow_up_info = {
+                                "is_follow_up": True,
+                                "last_query_id": last_query_id,
+                                "confidence": confidence,
+                                "hint": "Embedding-based follow-up detection. Reuse last query."
+                            }
+            except Exception as e:
+                # Fallback to keyword-based if intent classifier fails
+                print(f"⚠️  Intent classifier error: {e}")
+                print(f"   Falling back to keyword-based detection")
+                # Continue with keyword-based below
+        else:
+            # ⚡ FALLBACK: Keyword-based detection (fast but less robust)
+            system_info_response = self._detect_system_info_question(question)
+            if system_info_response:
+                return system_info_response
+            
+            follow_up_info = self._detect_follow_up_query(question, context)
+        
+        # Handle incompatible follow-up attempts
+        if follow_up_info and follow_up_info.get("incompatible"):
+            last_qid = follow_up_info.get("last_query_id")
+            reason = follow_up_info.get("reason", "Parameter not available")
+            
+            # Get available parameters for helpful message
+            if last_qid in self.query_registry:
+                available_params = list(self.query_registry[last_qid]['parameters'].keys())
+                available_params_str = ', '.join([p for p in available_params if p not in ['initialization', 'forecast_init', 'seasonal_init']])
+                
+                if available_params_str:
+                    clarification = f"The previous query ({last_qid}) doesn't support that parameter. {reason}\n\nAvailable parameters for this query: {available_params_str}\n\nDid you want to:\n• Modify one of these parameters?\n• Or run a different query instead?"
+                else:
+                    clarification = f"The previous query ({last_qid}) doesn't have adjustable parameters. It only returns one specific result.\n\nDid you want to run a different type of query? Try being more specific about what data you'd like to see."
+            else:
+                clarification = "The previous query doesn't support that modification. Could you rephrase or ask a new question?"
+            
+            return {
+                "decision": "NEED_MORE_INFO",
+                "clarification_question": clarification,
+                "reason": "incompatible_follow_up"
+            }
         
         # Step 1: Retrieve top-K candidates using embeddings
         print(f"🔍 Retrieving top-{self.top_k_candidates} similar queries via embeddings...")
