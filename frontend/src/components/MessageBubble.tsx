@@ -33,8 +33,15 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       ERROR: { color: 'bg-red-500/20 text-red-400 border-red-500/30', icon: AlertCircle, label: 'Error' },
     };
 
-    const badge = badges[response.decision];
-    const Icon = badge.icon;
+    // Check if OUT_OF_SCOPE is actually system information (not an error)
+    let badge = badges[response.decision];
+    let Icon = badge.icon;
+    
+    if (response.decision === 'OUT_OF_SCOPE' && (response as any).info_type) {
+      // This is system information, not an error - use friendlier badge
+      badge = { color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', icon: HelpCircle, label: 'System Info' };
+      Icon = HelpCircle;
+    }
 
     return (
       <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border ${badge.color}`}>

@@ -256,14 +256,22 @@ CRITICAL REMINDERS:
         has_follow_up_keyword = any(pattern in question_lower for pattern in follow_up_patterns)
         
         if not has_follow_up_keyword:
+            print(f"❌ No follow-up keyword found in: '{question}'")
             return None
+        
+        # Log which keyword was found
+        matched_keywords = [p for p in follow_up_patterns if p in question_lower]
+        print(f"✅ Follow-up keywords found: {matched_keywords}")
         
         # CRITICAL 1: Check parameter compatibility
         # Make sure the follow-up request is compatible with last query
+        print(f"🔍 Checking parameter compatibility for follow-up...")
         is_compatible, reason = self._validate_follow_up_compatibility(question, last_query_id)
+        print(f"   Result: {is_compatible}, Reason: {reason}")
+        
         if not is_compatible:
             print(f"⚠️  Follow-up incompatible: {reason}")
-            print(f"   User said 'same' but it doesn't make sense")
+            print(f"   User said follow-up keyword but parameters don't match")
             
             # Return incompatibility info (will be handled by caller)
             return {
@@ -374,9 +382,10 @@ CRITICAL REMINDERS:
         # System information question patterns
         system_info_patterns = [
             ('project', ['what project', 'which project', 'project information', 'project available', 
-                        'tell me about project', 'what data do you have']),
+                        'projects do you', 'tell me about project', 'what data do you have']),
             ('location', ['what location', 'which location', 'location available', 'locations served',
-                         'what zones', 'which zones']),
+                         'what zones', 'which zones', 'what regions', 'which regions', 'regions do you',
+                         'what areas', 'which areas']),
             ('capability', ['what can you', 'what do you', 'help me with', 'capabilities',
                           'what kind of', 'what type of']),
         ]

@@ -14,6 +14,7 @@ export interface QueryResponse {
   params: Record<string, unknown> | null;
   similarity_score: number | null;
   confidence: string | null;
+  info_type: string | null;  // For system info (project, locations, capabilities)
 }
 
 export interface Message {
