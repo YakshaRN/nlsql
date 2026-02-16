@@ -83,10 +83,14 @@ function App() {
           decision: 'ERROR',
           data: null,
           summary: null,
+          message: null,
           clarification_question: null,
           query_id: null,
           sql: null,
           params: null,
+          similarity_score: null,
+          confidence: null,
+          info_type: null,
         },
       };
 
@@ -122,7 +126,7 @@ function App() {
               <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-violet-600 rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-blue-500/20">
                 <BarChart3 className="w-10 h-10 text-white" />
               </div>
-              <h2 className="text-2xl font-bold mb-2">Welcome to ERCOT NLSQL</h2>
+              <h2 className="text-2xl font-bold mb-2">Welcome to ERCOT NL2SQL</h2>
               <p className="text-slate-400 max-w-md mb-8">
                 Ask questions about ERCOT energy forecasting data in natural language. 
                 I'll translate your queries to SQL and return the results.
