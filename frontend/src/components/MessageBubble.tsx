@@ -26,22 +26,17 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   const getDecisionBadge = () => {
     if (!response) return null;
 
-    const badges = {
+    const badges: Record<string, { color: string; icon: typeof Database; label: string }> = {
       EXECUTE: { color: 'bg-green-500/20 text-green-400 border-green-500/30', icon: Database, label: 'Query Executed' },
+      SYSTEM_INFO: { color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', icon: HelpCircle, label: 'System Info' },
+      CANNOT_ANSWER: { color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', icon: HelpCircle, label: 'Cannot Answer' },
       NEED_MORE_INFO: { color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', icon: HelpCircle, label: 'More Info Needed' },
       OUT_OF_SCOPE: { color: 'bg-orange-500/20 text-orange-400 border-orange-500/30', icon: AlertCircle, label: 'Out of Scope' },
       ERROR: { color: 'bg-red-500/20 text-red-400 border-red-500/30', icon: AlertCircle, label: 'Error' },
     };
 
-    // Check if OUT_OF_SCOPE is actually system information (not an error)
-    let badge = badges[response.decision];
+    const badge = badges[response.decision] || badges['ERROR'];
     let Icon = badge.icon;
-    
-    if (response.decision === 'OUT_OF_SCOPE' && (response as any).info_type) {
-      // This is system information, not an error - use friendlier badge
-      badge = { color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', icon: HelpCircle, label: 'System Info' };
-      Icon = HelpCircle;
-    }
 
     return (
       <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border ${badge.color}`}>

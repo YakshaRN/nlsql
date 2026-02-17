@@ -19,9 +19,11 @@ class ConversationTurn:
     """A single turn in the conversation."""
     question: str
     query_id: Optional[str] = None
+    sql: Optional[str] = None
     params: dict = field(default_factory=dict)
     summary: Optional[str] = None
     data_preview: Optional[list] = None  # First few rows of results
+    explanation: Optional[str] = None
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
 
 
@@ -31,6 +33,7 @@ class SessionContext:
     history: list = field(default_factory=list)  # List of ConversationTurn dicts
     last_params: dict = field(default_factory=dict)  # Most recent params for reuse
     last_query_id: Optional[str] = None  # Most recent query_id for follow-ups
+    last_sql: Optional[str] = None  # Most recent SQL for follow-ups
     
     def add_turn(self, turn: ConversationTurn):
         """Add a conversation turn, keeping only the last N turns."""
@@ -45,13 +48,18 @@ class SessionContext:
         # Track last query_id for follow-up questions
         if turn.query_id:
             self.last_query_id = turn.query_id
+        
+        # Track last SQL for follow-up questions
+        if turn.sql:
+            self.last_sql = turn.sql
     
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""
         return {
             "history": self.history,
             "last_params": self.last_params,
-            "last_query_id": self.last_query_id
+            "last_query_id": self.last_query_id,
+            "last_sql": self.last_sql
         }
     
     @classmethod

@@ -11,9 +11,8 @@ const exampleQueries = [
     icon: Zap,
     color: 'text-red-400',
     questions: [
-      'What is the peak probability of GSI > 0.60 in the next 14 days?',
-      'What is the probability of GSI exceeding 0.60 during evening ramp?',
-      'Show me the tightest hour with highest average GSI',
+      'What is the probability that ERCOT grid stress exceeds 0.8 tomorrow?',
+      'Show me the GSI forecast range (P10/P50/P90) for the next 7 days',
     ],
   },
   {
@@ -21,9 +20,8 @@ const exampleQueries = [
     icon: Thermometer,
     color: 'text-orange-400',
     questions: [
-      'What is the P01 extreme cold temperature forecast?',
-      'Show me average RTO load when temperature drops below -5°C',
-      'What is the P99 RTO Load for morning peak in February?',
+      'What is the expected temperature in Houston for the next 3 days?',
+      'Compare peak demand across all zones for tomorrow afternoon',
     ],
   },
   {
@@ -31,9 +29,8 @@ const exampleQueries = [
     icon: Wind,
     color: 'text-green-400',
     questions: [
-      'What is the probability of Dunkelflaute (wind and solar both below 5%)?',
-      'Show me P10 low wind forecast during evening ramp',
-      'What is the maximum 1-hour downward wind ramp?',
+      'Show me the wind generation forecast range for West Texas this week',
+      'What is the solar capacity factor forecast for tomorrow?',
     ],
   },
   {
@@ -41,9 +38,8 @@ const exampleQueries = [
     icon: Database,
     color: 'text-blue-400',
     questions: [
-      'Compare North vs West zone load spread in P99 scenario',
-      'What is the probability Houston load exceeds 25% of RTO load?',
-      'Which zone shows highest load volatility?',
+      'Compare wind generation between West and South zones for the next 3 days',
+      'What is the peak load forecast for Houston vs North zone?',
     ],
   },
 ];

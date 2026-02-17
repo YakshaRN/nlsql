@@ -27,11 +27,25 @@ function App() {
 
   const formatResponseContent = (response: QueryResponse): string => {
     switch (response.decision) {
-      case 'EXECUTE':
-        if (response.summary) {
-          return response.summary;
+      case 'EXECUTE': {
+        const parts: string[] = [];
+        if (response.explanation) {
+          parts.push(response.explanation);
         }
-        return `Query executed successfully. Found ${response.data?.length || 0} records.`;
+        if (response.summary) {
+          parts.push(response.summary);
+        }
+        if (response.assumptions) {
+          parts.push(`\n_Assumptions: ${response.assumptions}_`);
+        }
+        return parts.length > 0 ? parts.join('\n\n') : `Query executed successfully. Found ${response.data?.length || 0} records.`;
+      }
+      
+      case 'SYSTEM_INFO':
+        return response.message || 'Here is the system information you requested.';
+      
+      case 'CANNOT_ANSWER':
+        return response.message || "I couldn't generate a query for this question.";
       
       case 'NEED_MORE_INFO':
         return response.clarification_question || 'I need more information to answer your question. Could you please provide more details?';
@@ -40,7 +54,7 @@ function App() {
         return response.message || response.summary || "I'm sorry, but this question is outside the scope of what I can answer. I can help with ERCOT energy forecasting questions about GSI, load, temperature, wind, solar, and zonal data.";
       
       case 'ERROR':
-        return response.summary || 'An error occurred while processing your request. Please try again.';
+        return response.message || response.summary || 'An error occurred while processing your request. Please try again.';
       
       default:
         return 'Received an unexpected response.';
@@ -88,9 +102,11 @@ function App() {
           query_id: null,
           sql: null,
           params: null,
+          explanation: null,
+          assumptions: null,
+          info_type: null,
           similarity_score: null,
           confidence: null,
-          info_type: null,
         },
       };
 

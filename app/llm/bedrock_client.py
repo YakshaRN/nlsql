@@ -14,10 +14,32 @@ class BedrockClient:
                 "messages": [
                     {"role": "user", "content": user_prompt}
                 ],
-                "max_tokens": 800,
+                "max_tokens": 2048,
                 "temperature": 0
             })
         )
 
         raw = json.loads(response["body"].read())
-        return json.loads(raw["content"][0]["text"])
+        text = raw["content"][0]["text"]
+        
+        # Try to parse as JSON directly
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            # LLM might wrap JSON in markdown code blocks, try to extract
+            import re
+            json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text)
+            if json_match:
+                return json.loads(json_match.group(1))
+            
+            # Try to find JSON object in the text
+            json_match = re.search(r'\{[\s\S]*\}', text)
+            if json_match:
+                return json.loads(json_match.group(0))
+            
+            # If all else fails, return as explanation
+            return {
+                "explanation": text,
+                "sql": "",
+                "assumptions": "Could not parse structured response from LLM"
+            }
